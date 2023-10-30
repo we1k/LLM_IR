@@ -5,6 +5,40 @@ import json
 
 from typing import Dict, Tuple, Iterable
 from langchain.docstore.document import Document
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.vectorstores.faiss import FAISS
+
+def construct_content_index():
+    # # read documents
+    # documents, table_of_content = parse_page_of_content()
+    # save_docs_to_jsonl(documents, 'data/page_documents.jsonl')
+
+    # # # page_index --> page_image, page_text, page_vector?
+    # page_id2doc = dict()
+    # for page in documents:
+    #     page_id2doc[page.metadata["page"]] = page
+
+    # all_sub_sections = {sub_k : sub_v for _, v in table_of_content.items() for sub_k, sub_v in v.items() }
+    # print(all_sub_sections)
+
+    # load in huggingface model
+    model_name = "/home/lzw/.hf_models/stella-base-zh-v2"
+    embeddings = HuggingFaceEmbeddings(
+        model_name=model_name,
+        model_kwargs={"device": "cuda"} ,
+        encode_kwargs={"normalize_embeddings": False})
+
+    # construct content index docs
+    # content_index_docs = []
+    # for sub_section_title, page_ids in all_sub_sections.items():
+    #     content_index_docs.append(Document(page_content=sub_section_title, metadata={"page_ids": page_ids}))
+
+    # db = FAISS.from_documents(content_index_docs, embeddings)
+    # db.save_local("vector_store/page")
+
+    content_documents = load_docs_from_jsonl("data/section_documents.jsonl")
+    content_db = FAISS.from_documents(content_documents, embeddings)
+    content_db.save_local("vector_store/content")
 
 
 def save_docs_to_jsonl(array:Iterable[Document], file_path:str)->None:
@@ -52,6 +86,28 @@ def query_db(index_db, content_db, question, threshold=-120):
     return related_str, key_words, 
 
 
+def query_sentence_db(db, question, neighbor=2):
+    text_documents = load_docs_from_jsonl("data/texts.jsonl")
+    ret = db.similarity_search_with_relevance_scores(question, k=1)
+    id = ret[0][0].metadata["id"] - 1
+    related_str = text_documents[id].page_content
+
+    for i in range(neighbor + 1):
+        related_str += "<SEP>" + "\n".join(text_documents[id+i+1].page_content.split("\n")  [1:])
+    # prev_str, second_str = text_documents[id].page_content, text_documents[id+1].page_content
+    # second_str = "\n".join(second_str.split("\n")[1:])
+    # related_str = prev_str + "<SEP>" + second_str
+    return related_str, "None"
+
+
+SPECIAL_CASES_DICT = {
+    "锁屏模式" : ["锁定状态"],
+}
 def normalized_question(question):
     ## TODO: parse the question, get rid of useless words
+    # special case replacement
+    
+    for k, v in SPECIAL_CASES_DICT.items():
+        for x in v:
+            question = question.replace(x, k)
     return question

@@ -46,7 +46,8 @@ async def create_item(request: Request):
     return answer
 
 
-tokenizer = AutoTokenizer.from_pretrained("THUDM/chatglm2-6b", trust_remote_code=True, local_files_only=True)
-model = AutoModel.from_pretrained("THUDM/chatglm2-6b", trust_remote_code=True, local_files_only=True).half().cuda()
+path = "/home/lzw/.hf_models/chatglm3-6b"
+tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True)
+model = AutoModel.from_pretrained(path, trust_remote_code=True).cuda()
 model.eval()
 uvicorn.run(app, host='0.0.0.0', port=29501, workers=1)

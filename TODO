@@ -2,10 +2,14 @@
 
 3. setting similarity_search k = 2?
 
-4. 很多回答了额外的信息，如何处理？
+4. 很多回答了额外的信息，如何处理？ (回答两次) 第二次summarize
 
 5. 回答问题的时候加入 query_db的关键词信息
 
-6. 设置查询阈值，按照句子为单位进行切分
-
 7. utils.py 去除停用词
+
+8. sentence documents chunk size/ overlap可以调一下
+
+9. 设置threshold 为什么是-80？？
+
+10. 

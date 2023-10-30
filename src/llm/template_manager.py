@@ -7,12 +7,14 @@ class TemplateManager:
             # 如何？
             0 : PromptTemplate(
                 input_variables=["question", "related_str"],
-                template="根据已知信息筛选出最相关信息，综合地简洁的来回答问题。\n问题是：{question}\n已知信息：{related_str}\n答案是："
+                template="""
+                你是一位智能汽车使用说明的问答助手，根据在说明书提取的已知信息，完整、准确并简要地回答问题。不要回答额外信息。\n问题是：{question}\n已知信息：{related_str}\n答案是："
+                """
             ),
-            # 如何？
+            # 总结
             1 : PromptTemplate(
                 input_variables=["question",],
-                template="根据已知信息中简洁和专业的来回答问题.\n问题是：{question}\n答案是："
+                template="请简要地总结上述回答，只保留与问题最相关的部分。问题是：{question}"
             ),
             
         }
