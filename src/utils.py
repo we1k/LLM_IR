@@ -83,30 +83,39 @@ def query_db(index_db, content_db, question, threshold=-120):
         for doc in ret_docs:
             related_str += [doc.page_content]
 
-    return related_str, key_words, 
+    return related_str, key_words
 
 
-def query_sentence_db(db, question, neighbor=2):
+def query_sentence_db(db, question, neighbor=4, k=1):
     text_documents = load_docs_from_jsonl("data/texts.jsonl")
-    ret = db.similarity_search_with_relevance_scores(question, k=1)
-    id = ret[0][0].metadata["id"] - 1
-    related_str = text_documents[id].page_content
-
-    for i in range(neighbor + 1):
-        related_str += "<SEP>" + "\n".join(text_documents[id+i+1].page_content.split("\n")  [1:])
-    # prev_str, second_str = text_documents[id].page_content, text_documents[id+1].page_content
-    # second_str = "\n".join(second_str.split("\n")[1:])
-    # related_str = prev_str + "<SEP>" + second_str
+    ret_docs = db.similarity_search_with_relevance_scores(question, k=k)
+    print(ret_docs)
+    related_str = []
+    for ret_doc in ret_docs:
+        tmp_str = []
+        id = ret_doc[0].metadata["id"] - 2
+        seen_sent = {}
+        for i in range(neighbor + 1):
+            for sent in text_documents[id + i].page_content.split("\n"):
+                if sent in seen_sent:
+                    continue
+                seen_sent[sent] = True
+                tmp_str += [sent]
+        related_str += ["\n".join(tmp_str)]
+    
     return related_str, "None"
 
 
 SPECIAL_CASES_DICT = {
-    "锁屏模式" : ["锁定状态"],
+    # "锁屏模式" : ["锁定状态"],
+    # "颈椎撞击保护系统" : ["颈椎保护系统"],
 }
 def normalized_question(question):
     ## TODO: parse the question, get rid of useless words
     # special case replacement
-    
+    delimiters = ["如何", "？" , "什么", "哪些", "哪个", "哪种", "哪", "怎么", "怎样", "通过"]
+    for delimiter in delimiters:
+        question = question.replace(delimiter, "")
     for k, v in SPECIAL_CASES_DICT.items():
         for x in v:
             question = question.replace(x, k)

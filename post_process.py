@@ -12,11 +12,11 @@ def add_answer(path):
         for sample, new_sample in zip(samples, new_samples):
             # sample["answer_1"] = parse_answer(sample["answer_1"])
             # sample["answer_2"] = parse_answer(sample["answer_2"])
-            sample["answer_1"] = parse_answer(new_sample["answer"])
+            sample["answer_3"] = parse_answer(new_sample["answer"])
             # sample["answer_3"] = ""
             result.append(sample)
 
-    with open("data/ret.json", 'w', encoding='utf-8') as f:
+    with open("result/submit.json", 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=4)
 
 
@@ -42,20 +42,39 @@ def classify_answer():
 
 def add_answer_from_scratch():
     result = []
-    with open("data/测试问题.json", 'r', encoding='utf-8') as f1, open("result/0.3_top_p0.7_answer.json", 'r', encoding="utf-8") as f2:
+    with open("data/测试问题.json", 'r', encoding='utf-8') as f1:
         samples = json.load(f1)
-        new_samples = json.load(f2)
-        for sample, new_sample in zip(samples, new_samples):
+        for sample in samples:
             # sample["answer_1"] = new_sample["answer"]
-            sample["answer_2"] = parse_answer(new_sample["answer"])
-            sample["answer_3"] = ""
+            # sample["answer_2"] = parse_answer(new_sample["answer"])
+            sample.pop("answer_1")
+            sample.pop("answer_2")
+            sample.pop("answer_3")
+            sample["answer"] = ""
+            # sample["answer_2"] = ""
+            # sample["answer_3"] = ""
+            sample["default"] = ""
             result.append(sample)
 
-    with open("result/ret.json", 'w', encoding='utf-8') as f:
+    with open("data/ret.json", 'w', encoding='utf-8') as f:
+        json.dump(result, f, ensure_ascii=False, indent=4)
+
+def create_answer():
+    result = []
+
+    with open("result/74.20.json", 'r', encoding='utf-8') as f1, open("68-100.json", 'r', encoding="utf-8") as f2:
+        samples = json.load(f1)
+        new_samples = json.load(f2)
+        for i,  (sample, new_sample)  in enumerate(zip(samples[67:], new_samples)):
+            sample['answer_1'] = parse_answer(new_sample['answer_1']) 
+            result.append(sample)
+
+    with open("data/ret.json", 'w', encoding='utf-8') as f:
         json.dump(result, f, ensure_ascii=False, indent=4)
 
 if __name__ == '__main__':
     temperature = 0.5
     top_p = 0.6
-    add_answer(f"result/{temperature}_top_p{top_p}_answer.json")
-    # add_answer_from_scratch()
+    threshold = -75
+    # add_answer(f"result/threshold{threshold}_temperature{temperature}_top_p{top_p}_answer.json")
+    create_answer()
