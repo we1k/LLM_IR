@@ -26,7 +26,6 @@ def seed_everything(seed):
     torch.cuda.manual_seed_all(seed)
 
 
-
 def clean_related_str(related_str:List, keyword: Optional[List]=[], threshold=-80):
     """
         Input:
@@ -58,7 +57,8 @@ def clean_related_str(related_str:List, keyword: Optional[List]=[], threshold=-8
             deduplicated_parts.append(part)
 
     related_str = "\n".join(deduplicated_parts)
-    # print(related_str)
+    # if len(related_str) > 1:
+    #     print(related_str)
     return related_str
 
 def get_answer(data,prompt_template,
@@ -123,13 +123,8 @@ def main(opt):
         json_data = file.read()
     datas = json.loads(json_data)
 
-    prompt_template = ["""请根据说明书中提取的已知信息，简洁准确地回答问题。注意，相关信息的顺序不决定它的重要性，问题可能出现错别字，例如反光境是反光镜。问题是：{} {} 答案是：""",
+    prompt_template = ["""请根据说明书中提取的已知信息，简洁准确地回答问题。注意，相关信息的顺序不决定它的重要性，问题可能出现错别字，例如反光境是反光镜。问题是：{} 已知信息是：{} 答案是：""",
         """请根据问题尽可能简要地总结先前的回答，去掉与问题不相关的部分。问题是：{} \n先前的回答：\n{} 答案是："""]
-
-    max_length = 4096
-    top_p      = 0.6
-    temperature= 0.05
-    params = {"max_length":max_length,"top_p":top_p,"temperature":temperature}
 
     seed_everything(2023)
     results = []

@@ -1,14 +1,13 @@
 from transformers import AutoTokenizer, AutoModel
-from modelscope import Model
 import json 
 import torch
 from tqdm import tqdm
 import random
 import argparse
 
-device = 'cuda:1'
-chatglm_path = "baichuan-inc/Baichuan2-13B-Chat-4bits"
-chatglm = Model.from_pretrained(chatglm_path, device_map="balanced", trust_remote_code=True, torch_dtype=torch.float16)
+device = 'cuda:4'
+chatglm_path = "chatglm3-6b/chatglm3-6b"
+chatglm = AutoModel.from_pretrained(chatglm_path, trust_remote_code=True, device=device)
 chatglm = chatglm.eval()
 
 def seed_everything(seed):
@@ -64,22 +63,19 @@ def get_answer(data,prompt_template,chatglm,params,
         "info":clean_related_str(data["related_str"],data["keyword"])
         }
 
+    tokenizer = AutoTokenizer.from_pretrained(chatglm_path, trust_remote_code=True)
     system_info = {"role": "system", "content": "你是一位智能汽车说明的问答助手，你将根据节选的说明书的信息，完整地回答问题。"}
 
-    messages = []
-    messages.append(system_info)
-    response = chatglm(messages)
-    messages = response['history'].copy()
-
-    messages.append({"role": "user", "content": prompt_template[0].format(inputs["question"],inputs["info"])})
-    response1 = chatglm(messages)
-    messages = response1['history'].copy()
-    response2 = ""
+    # Execute the chain
+    user_info = inputs["info"]
+    # for i in range(len(inputs["info"])):
+    #     user_info += "第{}条相关信息：\n{}\n".format(i+1,inputs["info"][i]) 
+    response0, history = chatglm.chat(tokenizer,prompt_template[0].format(inputs["question"],user_info), history=[system_info],**params)
+    # print(prompt_template[0].format(inputs["question"],user_info))
     if loop:
-        messages.append({"role": "user", "content": prompt_template[1].format(inputs["question"])})
-        response2 = chatglm(messages)
+        response, history = chatglm.chat(tokenizer,prompt_template[1].format(inputs["question"]), history=history,**params)
 
-    return [response1,response2]
+    return [response0,response]
 
 def write_json(results,output_path):
     # 读取JSON文件
@@ -90,11 +86,11 @@ def write_json(results,output_path):
 
     # 保留question和answer字段
     filtered_data = []
-    for item,result in zip(data,results):
+    for item,result in zip(data,results): 
         filtered_item = {
             "question": result.get("question"),
-            "answer_1": result.get("answer_2").replace("\n", ""),
-            "answer_2": item.get("answer_2").replace("\n", ""),
+            "answer_1": result.get("answer_1").replace("\n", ""),
+            "answer_2": result.get("answer_2").replace("\n", ""),
             "answer_3": item.get("answer_3").replace("\n", "")
         }
         filtered_data.append(filtered_item)
@@ -107,12 +103,13 @@ def main(opt):
     if opt.test:
         data_path = "result/related_str_test.json"
     else:
-        data_path = "result/related_str.json"
+        # data_path = "result/related_str.json"
+        data_path = "result/related/related_str1101-76.75.json"
     with open(data_path, "r", encoding="utf-8") as file:
         json_data = file.read()
     datas = json.loads(json_data)
 
-    prompt_template = ["""请根据说明书中提取的已知信息回答问题。注意，相关信息的顺序不决定它的重要性，问题可能出现错别字，例如反光境是反光镜。问题是：{} {} 答案是：""",
+    prompt_template = ["""请根据说明书中提取的已知信息回答问题。注意，相关信息的顺序不决定它的重要性，问题可能出现错别字，例如反光境是反光镜。问题是：{} \n已知信息是{} 答案是：""",
         """请尽可能简要地总结先前的回答，只保留与问题最相关的部分，在总结中不要重复问题。问题是：{} 答案是："""]
 
     max_length = 4096
@@ -138,3 +135,4 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=str, default='final')
     opt = parser.parse_args()
     main(opt)
+

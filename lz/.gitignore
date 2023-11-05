@@ -1,5 +1,6 @@
 chatglm3-6b/
 result/
 baichuan-inc/
+temp/
 
 runapi.py
