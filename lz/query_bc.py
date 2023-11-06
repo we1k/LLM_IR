@@ -1,15 +1,10 @@
-from transformers import AutoTokenizer, AutoModel
-from modelscope import Model
+from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers.generation.utils import GenerationConfig
 import json 
 import torch
 from tqdm import tqdm
 import random
 import argparse
-
-device = 'cuda:1'
-chatglm_path = "baichuan-inc/Baichuan2-13B-Chat-4bits"
-chatglm = Model.from_pretrained(chatglm_path, device_map="balanced", trust_remote_code=True, torch_dtype=torch.float16)
-chatglm = chatglm.eval()
 
 def seed_everything(seed):
     torch.manual_seed(seed)
@@ -53,7 +48,7 @@ def clean_related_str(related_str, keyword, threshold=-80):
     # print(related_str)
     return related_str
 
-def get_answer(data,prompt_template,chatglm,params,
+def get_answer(data,prompt_template,chatglm,tokenizer,
                loop = True) -> str:
     """
     通过 ChatGLM 进行QA
@@ -68,16 +63,13 @@ def get_answer(data,prompt_template,chatglm,params,
 
     messages = []
     messages.append(system_info)
-    response = chatglm(messages)
-    messages = response['history'].copy()
-
     messages.append({"role": "user", "content": prompt_template[0].format(inputs["question"],inputs["info"])})
-    response1 = chatglm(messages)
-    messages = response1['history'].copy()
+    response1 = chatglm.chat(tokenizer, messages)
+    messages.append({"role": "assistant", "content": response1})
     response2 = ""
     if loop:
         messages.append({"role": "user", "content": prompt_template[1].format(inputs["question"])})
-        response2 = chatglm(messages)
+        response2 = chatglm.chat(tokenizer, messages)
 
     return [response1,response2]
 
@@ -93,8 +85,8 @@ def write_json(results,output_path):
     for item,result in zip(data,results):
         filtered_item = {
             "question": result.get("question"),
-            "answer_1": result.get("answer_2").replace("\n", ""),
-            "answer_2": item.get("answer_2").replace("\n", ""),
+            "answer_1": result.get("answer_1").replace("\n", ""),
+            "answer_2": result.get("answer_2").replace("\n", ""),
             "answer_3": item.get("answer_3").replace("\n", "")
         }
         filtered_data.append(filtered_item)
@@ -104,10 +96,18 @@ def write_json(results,output_path):
         json.dump(filtered_data, file,ensure_ascii=False,indent=4)
 
 def main(opt):
+    device = 'cuda:' + str(opt.device)
+    # chatglm_path = "baichuan-inc/Baichuan2-13B-Chat-4bits"
+    chatglm_path = "baichuan-inc/Baichuan2-7B-Chat"
+    tokenizer = AutoTokenizer.from_pretrained(chatglm_path, use_fast=False, trust_remote_code=True)
+    chatglm = AutoModelForCausalLM.from_pretrained(chatglm_path,device_map=device, torch_dtype=torch.bfloat16, trust_remote_code=True)
+    chatglm.generation_config = GenerationConfig.from_pretrained(chatglm_path)
+    chatglm = chatglm.eval()
     if opt.test:
         data_path = "result/related_str_test.json"
     else:
-        data_path = "result/related_str.json"
+        # data_path = "result/related_str.json"
+        data_path = "result/related/related_str1101-76.75.json"
     with open(data_path, "r", encoding="utf-8") as file:
         json_data = file.read()
     datas = json.loads(json_data)
@@ -115,15 +115,10 @@ def main(opt):
     prompt_template = ["""请根据说明书中提取的已知信息回答问题。注意，相关信息的顺序不决定它的重要性，问题可能出现错别字，例如反光境是反光镜。问题是：{} {} 答案是：""",
         """请尽可能简要地总结先前的回答，只保留与问题最相关的部分，在总结中不要重复问题。问题是：{} 答案是："""]
 
-    max_length = 4096
-    top_p      = 0.6
-    temperature= 0.05
-    params = {"max_length":max_length,"top_p":top_p,"temperature":temperature}
-
     seed_everything(2023)
     results = []
     for data in tqdm(datas,desc="question"):
-        ret = get_answer(data,prompt_template,chatglm,params)
+        ret = get_answer(data,prompt_template,chatglm,tokenizer)
         sample = {"question": data["question"], "answer_1": ret[0], "answer_2": ret[1]}
         results.append(sample)
         print(sample["answer_1"])
@@ -136,5 +131,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--test', action="store_true", help="whether to test")
     parser.add_argument('--output', type=str, default='final')
+    parser.add_argument('--device', type=int, default=1)
     opt = parser.parse_args()
     main(opt)
