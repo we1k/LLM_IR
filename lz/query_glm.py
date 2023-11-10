@@ -6,7 +6,7 @@ import random
 import argparse
 from fuzzywuzzy import fuzz,process
 
-device = 'cuda:4'
+device = 'cuda:2'
 chatglm_path = "chatglm3-6b/chatglm3-6b"
 chatglm = AutoModel.from_pretrained(chatglm_path, trust_remote_code=True, device=device)
 chatglm = chatglm.eval()
@@ -60,20 +60,23 @@ def clean_related_str(question,related_str, keyword, threshold=-80):
     deduplicated_parts = []
     # 去重，同时保证去重后的顺序不变
     for part in parts:
-        nobospart = part.strip("<BOS>")
+        nobospart = part.strip("。\n").replace("<SEP>","")
+        if nobospart.startswith("<BOS>"):
+            nobospart = nobospart[5:]
+        if len(nobospart) == 0:
+            continue
         if len(seen) > 0:
             _,max_score = process.extractOne(query=nobospart, choices=list(seen), scorer=adjusted_ratio_fn)
             if max_score > 95:
+                # print("删除句子",nobospart)
                 continue
-        if len(nobospart) > 0:
-            seen.add(nobospart)
-            deduplicated_parts.append(part)
+        seen.add(nobospart)
+        deduplicated_parts.append(part)
 
     tmp_str = "\n".join(deduplicated_parts)
     related_str = tmp_str.split("<BOS>")
     related_str = [str.strip("\n") for str in related_str]
 
-    # print(related_str)
     return related_str
 
 def get_answer(data,prompt_template,chatglm,params,
@@ -84,12 +87,12 @@ def get_answer(data,prompt_template,chatglm,params,
 
     inputs = {
         "question": data["question"],
-        "info":"".join(clean_related_str(data["question"],data["related_str"],data["keyword"]))
+        "info":clean_related_str(data["question"],data["related_str"],data["keyword"])
         # "info": data["related_str"]
         }
 
     tokenizer = AutoTokenizer.from_pretrained(chatglm_path, trust_remote_code=True)
-    system_info = {"role": "system", "content": "你是一位智能汽车说明的问答助手，你将根据节选的说明书的信息，完整地回答问题。"}
+    system_info = {"role": "system", "content": "你是一位智能汽车说明的问答助手，你将根据节选的说明书的信息，完整并简洁地回答问题。"}
 
     # Execute the chain
     user_info = ""
@@ -97,6 +100,7 @@ def get_answer(data,prompt_template,chatglm,params,
         user_info += "第{}条相关信息：\n{}\n".format(i+1,inputs["info"][i]) 
     response0, history = chatglm.chat(tokenizer,prompt_template[0].format(inputs["question"],user_info), history=[system_info],**params)
     # print(prompt_template[0].format(inputs["question"],user_info))
+    response = ""
     if loop:
         response, history = chatglm.chat(tokenizer,prompt_template[1].format(inputs["question"]), history=history,**params)
 
@@ -128,36 +132,41 @@ def main(opt):
     if opt.test:
         data_path = "result/related_str_test.json"
     else:
-        data_path = "result/related_str.json"                 ## k更大
-        # data_path = "result/related/related_str1101-76.75.json" ## 前面一句后面两句 
+        if opt.k == 'more':
+            data_path = "result/related_str.json"                 ## k更大
+        else:
+            data_path = "result/related/related_str1101-76.75.json" ## 前面一句后面两句 
+    print(data_path)
     with open(data_path, "r", encoding="utf-8") as file:
         json_data = file.read()
     datas = json.loads(json_data)
 
-    prompt_template = ["""请根据说明书中提取的已知信息回答问题。注意，相关信息的顺序不决定它的重要性，问题可能出现错别字，例如反光境是反光镜。问题是：{} \n{}答案是：""",
+    prompt_template = ["""你是一位智能汽车使用说明的问答助手，现在需要根据已有信息，完整简要地回答问题。问题是：{} \n{}答案是：""",
         """请尽可能简要地总结先前的回答，只保留与问题最相关的部分，在总结中不要重复问题。问题是：{} 答案是："""]
 
     max_length = 4096
     top_p      = 0.6
-    temperature= 0.05
+    temperature= 0.5
     params = {"max_length":max_length,"top_p":top_p,"temperature":temperature}
 
     seed_everything(2023)
     results = []
     for data in tqdm(datas,desc="question"):
-        ret = get_answer(data,prompt_template,chatglm,params)
+        ret = get_answer(data,prompt_template,chatglm,params,loop=True)
         sample = {"question": data["question"], "answer_1": ret[0], "answer_2": ret[1]}
         results.append(sample)
         print(sample["answer_1"])
         print("---")
         print(sample["answer_2"])
 
-    write_json(results=results,output_path="result/" + opt.output + ".json")
+    if opt.test == False :
+        write_json(results=results,output_path="result/" + opt.output + "{}.json".format(opt.k))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--test', action="store_true", help="whether to test")
     parser.add_argument('--output', type=str, default='final')
+    parser.add_argument('--k', type=str, default='more', help="more or less")
     opt = parser.parse_args()
     main(opt)
 
