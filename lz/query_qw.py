@@ -1,16 +1,11 @@
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModelForCausalLM
 import json 
 from tqdm import tqdm
 import argparse
 
-from utils import clean_question,clean_related_str,seed_everything,check_string,remove_excess,write_json
+from utils import clean_question,clean_related_str,seed_everything,write_json
 
-device = 'cuda:7'
-chatglm_path = "chatglm3-6b/chatglm3-6b"
-chatglm = AutoModel.from_pretrained(chatglm_path, trust_remote_code=True, device=device)
-chatglm = chatglm.eval()
-
-def get_answer(data,prompt_template,chatglm,params,abbre_dict,
+def get_answer(data,prompt_template,chatglm,tokenizer,params,abbre_dict,
                loop = True) -> str:
     """
     通过 ChatGLM 进行QA
@@ -21,8 +16,7 @@ def get_answer(data,prompt_template,chatglm,params,abbre_dict,
         "info":clean_related_str(data["question"],data["related_str"],data["keyword"])
         # "info": data["related_str"]
         }
-
-    tokenizer = AutoTokenizer.from_pretrained(chatglm_path, trust_remote_code=True)
+     
     system_info = {"role": "system", "content": "你是一位智能汽车说明的问答助手，你将根据节选的说明书的信息，完整并简洁地回答问题。"}
 
     # Execute the chain
@@ -37,7 +31,14 @@ def get_answer(data,prompt_template,chatglm,params,abbre_dict,
 
     return [response0,response]
 
+
 def main(opt):
+    device = 'cuda:{}'.format(opt.device)
+    chatglm_path = "Qwen-7B-Chat"
+    chatglm = AutoModelForCausalLM.from_pretrained(chatglm_path, trust_remote_code=True, device_map=device)
+    tokenizer = AutoTokenizer.from_pretrained(chatglm_path, trust_remote_code=True)
+    chatglm = chatglm.eval()
+
     input_file = 'translate.json'
     with open(input_file, 'r', encoding='utf-8') as file:
         abbre_dict = json.load(file)
@@ -53,21 +54,18 @@ def main(opt):
         json_data = file.read()
     datas = json.loads(json_data)
 
-    prompt_template = ["""你是一位智能汽车使用说明的问答助手，现在需要从已有信息保留与问题最相关的部分，完整并简要地回答问题。问题是：{} \n{}答案是：""",
+    prompt_template = ["""你是一位智能汽车使用说明的问答助手，现在需要从已有信息保留与问题最相关的部分，简要地回答问题，回答问题时最好保留原文的风格。问题是：{} \n{}答案是：""",
         """请尽可能简要地总结先前的回答，只保留与问题最相关的部分，在总结中不要重复问题。问题是：{} 答案是："""]
 
-    max_length = 4096
+    max_new_tokens = 4096
     top_p      = 0.6
     temperature= 0.5
-    params = {"max_length":max_length,"top_p":top_p,"temperature":temperature}
+    params = {"max_new_tokens":max_new_tokens,"top_p":top_p,"temperature":temperature}
 
     seed_everything(2023)
     results = []
     for data in tqdm(datas,desc="question"):
-        if check_string(data["question"],data["related_str"]):
-            ret = [remove_excess(data["related_str"][0]),""]
-        else:
-            ret = get_answer(data,prompt_template,chatglm,params,abbre_dict,loop=True)
+        ret = get_answer(data,prompt_template,chatglm,tokenizer,params,abbre_dict,loop=False)
         sample = {"question": data["question"], "answer_1": ret[0], "answer_2": ret[1]}
         results.append(sample)
         print(sample["answer_1"])
@@ -82,6 +80,7 @@ if __name__ == '__main__':
     parser.add_argument('--test', action="store_true", help="whether to test")
     parser.add_argument('--output', type=str, default='final')
     parser.add_argument('--k', type=str, default='more', help="more or less")
+    parser.add_argument('--device', type=int, default=3)
     opt = parser.parse_args()
     main(opt)
 

@@ -6,6 +6,7 @@ import argparse
 # from langchain.llms import ChatGLM
 from chatglm3.ChatGLM import ChatGLM
 from typing import List, Optional
+from utils import clean_question,clean_related_str,seed_everything
 
 endpoint_url = ("http://127.0.0.1:29501")
 
@@ -17,51 +18,7 @@ config = {
         # "with_history": True,
     }
 
-def seed_everything(seed):
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    random.seed(seed)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
-    torch.cuda.manual_seed_all(seed)
-
-
-def clean_related_str(related_str:List, keyword: Optional[List]=[], threshold=-80):
-    """
-        Input:
-            related_str: List[str]
-        Return:
-            List[str]
-    """
-    if len(related_str) == 1:
-        return related_str
-
-    ## remove previous section (if it contains the keyword)
-    if len(keyword) > 0 and keyword[0][1] > threshold:
-        potential_section = keyword[0][0] + "\n"
-        for i in range(len(related_str)):
-            if potential_section in related_str[i]:
-                related_str[i] = potential_section + potential_section.join(related_str[i].split(potential_section)[1:])
-            
-    ## remove duplicate
-    tmp_str = "\n".join(related_str)
-    parts = tmp_str.split("\n")
-    # print(parts)
-    # print("--------------------------------")
-    seen = set()
-    deduplicated_parts = []
-    # 去重，同时保证去重后的顺序不变
-    for part in parts:
-        if part not in seen:
-            seen.add(part)
-            deduplicated_parts.append(part)
-
-    related_str = "\n".join(deduplicated_parts)
-    # if len(related_str) > 1:
-    #     print(related_str)
-    return related_str
-
-def get_answer(data,prompt_template,
+def get_answer(data,prompt_template,abbre_dict,
                loop = True) -> str:
     """
     通过 ChatGLM 进行QA
@@ -76,17 +33,17 @@ def get_answer(data,prompt_template,
     )
 
     inputs = {
-        "question": data["question"],
-        "info":clean_related_str(data["related_str"], data["keyword"])
+        "question": clean_question(data["question"],abbre_dict),
+        "info":clean_related_str(data["question"],data["related_str"],data["keyword"])
         }
 
     # Execute the chain
-    user_info = inputs["info"]
-    # for i in range(len(inputs["info"])):
-    #     user_info += "第{}条相关信息：\n{}\n".format(i+1,inputs["info"][i]) 
-
+    user_info = ""
+    for i in range(len(inputs["info"])):
+        user_info += "第{}条相关信息：\n{}\n".format(i+1,inputs["info"][i]) 
     response0 = chatglm(prompt_template[0].format(inputs["question"],user_info))
-    # print(prompt_template[0].format(inputs["question"],user_info))
+    print(prompt_template[0].format(inputs["question"],user_info))
+    response = ""
     if loop:
         response = chatglm(prompt_template[1].format(inputs["question"],response0))
 
@@ -115,6 +72,10 @@ def write_json(results,output_path):
         json.dump(filtered_data, file,ensure_ascii=False,indent=4)
 
 def main(opt):
+    input_file = 'translate.json'
+    with open(input_file, 'r', encoding='utf-8') as file:
+        abbre_dict = json.load(file)
+
     if opt.test:
         data_path = "result/related_str_test.json"
     else:
@@ -129,14 +90,13 @@ def main(opt):
     seed_everything(2023)
     results = []
     for data in tqdm(datas,desc="question"):
-        ret = get_answer(data,prompt_template)
+        ret = get_answer(data,prompt_template,abbre_dict,loop=False)
         sample = {"question": data["question"], "answer_1": ret[0], "answer_2": ret[1]}
         results.append(sample)
         print(sample["answer_1"])
-        print("---")
-        print(sample["answer_2"])
 
-    write_json(results=results,output_path="result/" + opt.output + ".json")
+    if opt.test == False :
+        write_json(results=results,output_path="result/" + opt.output + "{}.json".format(opt.k))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

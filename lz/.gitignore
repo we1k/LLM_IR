@@ -1,6 +1,15 @@
+## LLM 
 chatglm3-6b/
-result/
+chatglm2-6b-hug/
+Qwen-7B-Chat/
 baichuan-inc/
+## result json file
+result/
 temp/
-
+## docker file
+app/
+fast/
+Dockerfile 
+Dockerfile_fast
+## api
 runapi.py
