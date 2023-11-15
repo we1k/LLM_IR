@@ -11,5 +11,6 @@ app/
 fast/
 Dockerfile 
 Dockerfile_fast
+build.sh
 ## api
 runapi.py
