@@ -16,7 +16,6 @@ imgs/
 tmp/
 pdf_output/
 vector_store/
-builder/
-result
+result/*
 
 TODO
