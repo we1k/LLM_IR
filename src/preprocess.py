@@ -8,8 +8,7 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.schema import Document
 from langchain.vectorstores import FAISS, Chroma
 
-from embeddings import BGEpeftEmbedding
-from utils import clean_text
+from src.embeddings import BGEpeftEmbedding
 
 MAX_SENTENCE_LEN = 29
 DELIMITER = ['，', '。', '；', '–', '：', '！', '-', '、', '■', '□', '℃']
@@ -110,7 +109,7 @@ def build_sections():
         
     return section_docs
 
-def main():
+def preprocess(embedding_model):
     with open("data/raw.txt", 'r', encoding='UTF-8') as f:
         text = f.read()
 
@@ -135,12 +134,25 @@ def main():
         
 
     # get retriever !!
-    model_name = "/home/lzw/.hf_models/stella-base-zh-v2"
-    # model_name = "./model/gte-large-zh"
-    embeddings = HuggingFaceEmbeddings(
-        model_name=model_name,
-        model_kwargs={"device": "cuda"} ,
-        encode_kwargs={"normalize_embeddings": False})
+    # load in embedding model
+    if "bge" in embedding_model:
+        model_name = "/home/lzw/.hf_models/bge-large-zh-v1.5"
+        embeddings = BGEpeftEmbedding(model_name)
+    elif "stella" in embedding_model:
+        if "large" in embedding_model:
+            model_name = "/home/lzw/.hf_models/stella-large-zh-v2"
+        else:
+            model_name = "/home/lzw/.hf_models/stella-base-zh-v2"
+        embeddings = HuggingFaceEmbeddings(
+            model_name=model_name,
+            model_kwargs={"device": "cuda"} ,
+            encode_kwargs={"normalize_embeddings": False})
+    elif "gte" in embedding_model:
+        model_name = "./model/gte-large-zh"
+        embeddings = HuggingFaceEmbeddings(
+            model_name=model_name,
+            model_kwargs={"device": "cuda"} ,
+            encode_kwargs={"normalize_embeddings": False})
     
 
     db = FAISS.from_documents(section_docs, embeddings)
@@ -186,4 +198,4 @@ def main():
     sent_db.save_local("vector_store/sentence_db")
 
 if __name__ == '__main__':
-    main()
+    preprocess("stella")
