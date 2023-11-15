@@ -39,7 +39,7 @@ class BGEpeftEmbedding(Embeddings):
             end = min(start + self.batch_size, num_texts)
             batch_texts = texts[start:end]
 
-            encoded_input = self.tokenizer(batch_texts, padding=True, truncation=True, return_tensors='pt')
+            encoded_input = self.tokenizer(batch_texts, max_length=512, padding=True, truncation=True, return_tensors='pt')
             encoded_input.to(self.device)
             with torch.no_grad():
                 model_output = self.model(**encoded_input)
