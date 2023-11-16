@@ -10,7 +10,6 @@ from langchain.vectorstores import FAISS, Chroma
 
 from src.embeddings import BGEpeftEmbedding
 
-MAX_SENTENCE_LEN = 29
 DELIMITER = ['，', '。', '；', '–', '：', '！', '-', '、', '■', '□', '℃']
 
 def save_docs_to_jsonl(array, file_path:str)->None:
@@ -21,7 +20,7 @@ def save_docs_to_jsonl(array, file_path:str)->None:
 
 def get_keywords():
     # File path to the outline document
-    file_path = 'pdf_output/QA.outline'
+    file_path = 'pdf_output/trainning_data.outline'
 
     # Read the entire file content
     with open(file_path, 'r') as file:
@@ -38,7 +37,7 @@ def get_keywords():
     return chapter_names
 
 
-def build_sections():
+def build_sections(max_sentence_len=29):
     keywords = get_keywords()
     section_docs = []
     sections = defaultdict(str)
@@ -63,8 +62,6 @@ def build_sections():
 
     sections[chapter_name] = tmp
     for chapter_name, text in sections.items():
-        if chapter_name == "前方交叉路口预警系统":
-            cnt = 1
         subsection_dict = {}
         text = text.replace("点击\n", "点击")
         text = text.replace("\n-", "-")
@@ -74,20 +71,18 @@ def build_sections():
         keyword = chapter_name
         cur_chunk = chapter_name + "\n"
         for sentence in sentences:
-            if "强烈的光照降低摄像头检测能力" in sentence:
-                cnt = 1
             sentence = sentence.strip("<SEP>")
             if len(sentence) == 0 or sentence.isdigit():
                 continue
             # 大概率是目录
             # 可能包含章节数字 1.1 标题
-            elif re.match(r"^\d*(\.\d+)?.*$", sentence) and not any(it in sentence for it in DELIMITER) and not sentence.startswith("0") and 1< len(sentence) <= MAX_SENTENCE_LEN - 1:
+            elif re.match(r"^\d*(\.\d+)?.*$", sentence) and not any(it in sentence for it in DELIMITER) and not sentence.startswith("0") and 1< len(sentence) <= max_sentence_len - 1:
                 if cur_chunk.strip("\n") != keyword:
                     subsection_dict[keyword] = cur_chunk
                 keyword = sentence
                 cur_chunk = sentence + "\n"
             # 拼接上下句子
-            elif len(sentence) >= MAX_SENTENCE_LEN - 1 or ("，" in sentence and not sentence.endswith("。")):
+            elif len(sentence) >= max_sentence_len - 1 or ("，" in sentence and not sentence.endswith("。")):
                 cur_chunk += sentence
             # 换行后第一个字符是分隔符
             elif any(sentence.startswith(it) for it in DELIMITER):
@@ -99,8 +94,6 @@ def build_sections():
         if cur_chunk.strip("\n") != keyword:
             subsection_dict[keyword] = cur_chunk
 
-        if chapter_name == "前方交叉路口预警系统":
-            cnt = 1
         for subkeyword, text_chunk in subsection_dict.items():
             if len(text_chunk.strip("<SEP>")) > 0 and not text_chunk.isalpha() > 0:
                 # skip special char
@@ -109,7 +102,7 @@ def build_sections():
         
     return section_docs
 
-def preprocess(embedding_model):
+def preprocess(embedding_model, local_run=False, max_sentence_len=29):
     with open("data/raw.txt", 'r', encoding='UTF-8') as f:
         text = f.read()
 
@@ -122,9 +115,9 @@ def preprocess(embedding_model):
     with open("data/all.txt", 'w', encoding='UTF-8') as f:
         f.write(all_text)
 
-    section_docs = build_sections()
+    section_docs = build_sections(max_sentence_len)
 
-    save_docs_to_jsonl(section_docs, "tmp/section_docs.jsonl")
+    save_docs_to_jsonl(section_docs, "doc/section_docs.jsonl")
 
     all_keywords = [doc.metadata["keyword"] for doc in section_docs] + [doc.metadata["subkeyword"] for doc in section_docs]
     all_keywords = list(set(all_keywords))
@@ -136,19 +129,19 @@ def preprocess(embedding_model):
     # get retriever !!
     # load in embedding model
     if "bge" in embedding_model:
-        model_name = "/home/lzw/.hf_models/bge-large-zh-v1.5"
+        model_name = "/app/models/bge-large-zh-v1.5"
         embeddings = BGEpeftEmbedding(model_name)
     elif "stella" in embedding_model:
-        if "large" in embedding_model:
-            model_name = "/home/lzw/.hf_models/stella-large-zh-v2"
-        else:
+        if local_run:
             model_name = "/home/lzw/.hf_models/stella-base-zh-v2"
+        else:
+            model_name = "/app/models/stella-base-zh-v2"
         embeddings = HuggingFaceEmbeddings(
             model_name=model_name,
             model_kwargs={"device": "cuda"} ,
             encode_kwargs={"normalize_embeddings": False})
     elif "gte" in embedding_model:
-        model_name = "./model/gte-large-zh"
+        model_name = "/app/models/gte-large-zh"
         embeddings = HuggingFaceEmbeddings(
             model_name=model_name,
             model_kwargs={"device": "cuda"} ,
@@ -193,7 +186,7 @@ def preprocess(embedding_model):
     sent_docs = clean_sent_docs
 
 
-    save_docs_to_jsonl(sent_docs, "tmp/sent_docs.jsonl")
+    save_docs_to_jsonl(sent_docs, "doc/sent_docs.jsonl")
     sent_db = FAISS.from_documents(sent_docs, embeddings)
     sent_db.save_local("vector_store/sentence_db")
 

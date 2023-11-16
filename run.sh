@@ -1,12 +1,16 @@
-# builder for pdf2html
-sudo apt install ./builder/pdf2htmlEX.deb
-pip install html2text
+# /tcdata/trainning_data.pdf
+MAX_SENTENCE_LEN=29
 
-# pdf2html
-pdf2htmlEX --embed cfijo --dest-dir pdf_output data/QA.pdf
+INPUT_PDF_PATH="/tcdata/trainning_data.pdf"
 
-# html2text
-html2text pdf_output/QA.html utf-8 --ignore-links --escape-all > data/raw.txt
+pdf2htmlEX --embed cfijo --dest-dir pdf_output $INPUT_PDF_PATH
+html2text pdf_output/trainning_data.html utf-8 --ignore-links --escape-all > data/raw.txt
+
 
 # run file for python
 python retrieve_info.py --embedding_model stella
+python query_glm.py
+python query_bc.py
+python query_qw.py
+python src/generator.py
+cp result/submit.json /app/result.json

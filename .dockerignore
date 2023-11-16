@@ -4,10 +4,19 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-output/*
+pdf_output/
+result/*
 log/*
+doc/*
+
 
 pyrightconfig.json
+BM25.ipynb
+
 .vscode
 tcdata
 test
+models
+builder
+
+TODO

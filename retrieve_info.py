@@ -25,10 +25,13 @@ from src.utils import normalized_question, adjusted_ratio_fn, load_docs_from_jso
 set_seed(42)
 endpoint_url = ("http://127.0.0.1:29501")
 
-def run_query(args, question_path='data/测试问题.json'):
-    if args.test == True:
-        args.local_run = True
-        question_path = 'data/test.json'
+def run_query(args):
+    if args.local_run == True:
+        args.test = True
+        question_path = "data/test_question.json"
+    else:
+        question_path = "/tcdata/test_question.json"
+
 
     with open(question_path, 'r', encoding='utf-8') as f:
         question_list = json.load(f)
@@ -36,35 +39,33 @@ def run_query(args, question_path='data/测试问题.json'):
 
     # load in embedding model
     if "bge" in args.embedding_model:
-        model_name = "/home/lzw/.hf_models/bge-large-zh-v1.5"
+        model_name = "/app/models/bge-large-zh-v1.5"
         embeddings = BGEpeftEmbedding(model_name)
     elif "stella" in args.embedding_model:
-        if "large" in args.embedding_model:
-            model_name = "/home/lzw/.hf_models/stella-large-zh-v2"
-        else:
+        if args.local_run:
             model_name = "/home/lzw/.hf_models/stella-base-zh-v2"
+        else:
+            model_name = "/app/models/stella-base-zh-v2"
         embeddings = HuggingFaceEmbeddings(
             model_name=model_name,
             model_kwargs={"device": "cuda"} ,
             encode_kwargs={"normalize_embeddings": False})
     elif "gte" in args.embedding_model:
-        model_name = "./model/gte-large-zh"
+        model_name = "/app/models/gte-large-zh"
         embeddings = HuggingFaceEmbeddings(
             model_name=model_name,
             model_kwargs={"device": "cuda"} ,
             encode_kwargs={"normalize_embeddings": False})
 
-    # construct a LLMchain
-
-    if args.local_run:
+    if args.test:
         config = {
             "temperature": args.temperature,
             "top_p": args.top_p,
             # "max_new_tokens": 48,
-            "threshold" : args.threshold,
             "max_tokens": 48,
         }
 
+        # construct a LLMchain
         llm = ChatGLM(
             endpoint_url=endpoint_url,
             history=[],
@@ -92,15 +93,9 @@ def run_query(args, question_path='data/测试问题.json'):
     with open("data/abbr2word.json", 'r', encoding='UTF-8') as f:
         Abbr2word = json.load(f)
 
-    with open("data/subkey2section_dict.json", 'r', encoding='UTF-8') as f:
-        subkey2section_dict = json.load(f)
-    
-    subsection_keys = list(subkey2section_dict.keys())
-    section_keys = list(set(subkey2section_dict.values()))
-
     # load in section and sentence docs
-    section_docs = load_docs_from_jsonl("tmp/section_docs.jsonl")
-    sent_docs = load_docs_from_jsonl("tmp/sent_docs.jsonl")
+    section_docs = load_docs_from_jsonl("doc/section_docs.jsonl")
+    sent_docs = load_docs_from_jsonl("doc/sent_docs.jsonl")
 
     id2sent_dict = {}
     for doc in sent_docs:
@@ -120,7 +115,6 @@ def run_query(args, question_path='data/测试问题.json'):
         norm_question = normalized_question(question)
 
         # 通过关键词检索 section
-        # jieba section cut
         keywords = []
         related_sections = []
         tags = jieba.analyse.extract_tags(norm_question, withWeight=False, allowPOS=())
@@ -129,12 +123,10 @@ def run_query(args, question_path='data/测试问题.json'):
             if tag in all_keywords:
                 keywords.append(tag)
 
-        # TODO: 通过关键词检索 subsection
         # 通过关键词检索 subsection
         for keyword in keywords:
             if keyword in all_keywords:
                 section_retriever = content_db.as_retriever(search_kwargs={'k': 2, "filter": {"keyword": keyword}})
-                # related_sections += 
                 
         # keywords embedding
         # for keyword in list(set([k[0] for k in keywords])):
@@ -148,8 +140,12 @@ def run_query(args, question_path='data/测试问题.json'):
 
         ### TODO:需要设置阈值
         # content_db.similarity_search_with
-        section_retriever = content_db.as_retriever(search_kwargs={'k': 2})
-        ret_docs = section_retriever.get_relevant_documents(question)
+        ret_docs_with_score = content_db.similarity_search_with_relevance_scores(question, k=2)
+        ret_docs = []
+        for doc, score in ret_docs_with_score:
+            if score > args.threshold:
+                keywords.append((doc.metadata["subkeyword"], score))
+                ret_docs.append(doc)
         related_sections += [doc.page_content for doc in ret_docs]
 
         # sentence db and fuzzywuzzy to rerank
@@ -178,18 +174,8 @@ def run_query(args, question_path='data/测试问题.json'):
                 cur_idx += 1
             related_sents.append(concat_sent)
 
-
-        # keywords 检索到的关键词分数
-        if len(related_sections) >= 1:
-            print(f"Using section db plus top {args.max_num_related_str-len(related_sections)} sentence db")
-            related_sents = related_sents[:args.max_num_related_str-len(related_sections)]
-        else:
-            print("Using top args.max_num_related_str sentence db")
-            related_sections = []
-            related_sents = related_sents[:args.max_num_related_str]
-            # 向后找完整个句子
-
-            keywords += [("sentence", 0)]
+        
+        related_sents = related_sents[:args.max_num_related_str-2]
         
         related_str = related_sections + related_sents
 
@@ -202,25 +188,24 @@ def run_query(args, question_path='data/测试问题.json'):
         answers.append(sample)
 
     
-    if args.test == False:
-        with open(f"result/related_str.json", 'w', encoding='utf-8') as f:
+    if args.test == True:
+        with open(f"result/test.json", 'w', encoding='utf-8') as f:
             json.dump(answers, f, ensure_ascii=False, indent=4)
     else:
-        with open(f"result/test.json", 'w', encoding='utf-8') as f:
+        with open(f"result/related_str.json", 'w', encoding='utf-8') as f:
             json.dump(answers, f, ensure_ascii=False, indent=4)
 
 if __name__ == '__main__':
-    # construct_content_index()
     parser = ArgumentParser()
     parser.add_argument("--test", action="store_true")
-    parser.add_argument("--threshold", default=-120, type=int)
+    parser.add_argument("--threshold", default=-140, type=int)
     parser.add_argument("--temperature", default=0.5, type=float)
     parser.add_argument("--top_p", default=0.6, type=float)
     parser.add_argument("--max_num_related_str", default=5, type=int)
+    parser.add_argument("--max_sentence_len", default=29, type=int)
     parser.add_argument("--local_run", action="store_true")
     parser.add_argument("--embedding_model", default="stella")
     args = parser.parse_args()
     # bge // stella // gte
-    preprocess(args.embedding_model)
+    preprocess(args.embedding_model, args.local_run, args.max_sentence_len)
     run_query(args)
-    # pass

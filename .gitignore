@@ -13,9 +13,10 @@ __pycache__/
 # Other files
 data/
 imgs/
-tmp/
 pdf_output/
 vector_store/
 result/*
+doc/*
+tcdata/
 
 TODO
