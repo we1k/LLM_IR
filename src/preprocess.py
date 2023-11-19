@@ -18,7 +18,7 @@ def save_docs_to_jsonl(array, file_path:str)->None:
             jsonl_file.write(json.dumps(doc.dict(), ensure_ascii=False) + '\n')
 
 
-def get_keywords():
+def get_keywords_and_first_page():
     # File path to the outline document
     file_path = 'pdf_output/trainning_data.outline'
 
@@ -34,11 +34,11 @@ def get_keywords():
 
     chapter_to_number_dict = {detail[1].strip(): int(detail[0]) for detail in chapter_details}
     chapter_names = [k.replace("&amp;", "&").strip() for k, v in chapter_to_number_dict.items()]
-    return chapter_names
+    first_page_id = list(chapter_to_number_dict.values())[0]
+    return chapter_names, first_page_id
 
 
-def build_sections(max_sentence_len=29):
-    keywords = get_keywords()
+def build_sections(keywords, max_sentence_len=29):
     section_docs = []
     sections = defaultdict(str)
     chapter_name = ""
@@ -103,19 +103,24 @@ def build_sections(max_sentence_len=29):
     return section_docs
 
 def preprocess(embedding_model, local_run=False, max_sentence_len=29):
+    keywords, first_page_id = get_keywords_and_first_page()
+
     with open("data/raw.txt", 'r', encoding='UTF-8') as f:
         text = f.read()
+
+    # 去掉目录 之前所有的内容
+    text = re.split(r'!\[\]\(bg{:x}\.png\)'.format(first_page_id), text)[1]
 
     sections = re.split(r'!\[\]\(.+?\)', text)
     # 去掉页眉和页码
     for i in range(len(sections)):
-        sections[i] = re.sub(rf'^.*?\n{i}\n', "", sections[i], flags=re.DOTALL)
+        sections[i] = re.sub(rf'^.*?\n{i+first_page_id}\n', "", sections[i], flags=re.DOTALL)
 
     all_text = "".join(sections).replace("\n\n", "\n")
     with open("data/all.txt", 'w', encoding='UTF-8') as f:
         f.write(all_text)
 
-    section_docs = build_sections(max_sentence_len)
+    section_docs = build_sections(keywords, max_sentence_len)
 
     save_docs_to_jsonl(section_docs, "doc/section_docs.jsonl")
 
@@ -174,6 +179,8 @@ def preprocess(embedding_model, local_run=False, max_sentence_len=29):
     clean_sent_docs = []
     for doc in sent_docs:
         cur_doc_content += doc.page_content
+        # TODO : 50 is the hyperparameter, and using doc.page_content instead of cur_doc_content may be a bug?
+        # doc.page_content > 50 means the doc is a complete sentence, but cur_doc_content is not
         if len(doc.page_content) >= 50:
             doc.page_content = cur_doc_content
             doc.page_content = doc.page_content.replace("<SEP>", "")
@@ -191,4 +198,4 @@ def preprocess(embedding_model, local_run=False, max_sentence_len=29):
     sent_db.save_local("vector_store/sentence_db")
 
 if __name__ == '__main__':
-    preprocess("stella")
+    preprocess("stella", local_run=True)
