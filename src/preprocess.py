@@ -9,6 +9,7 @@ from langchain.schema import Document
 from langchain.vectorstores import FAISS, Chroma
 
 from src.embeddings import BGEpeftEmbedding
+from src.text_splitter import ChineseRecursiveTextSplitter
 
 DELIMITER = ['，', '。', '；', '–', '：', '！', '-', '、', '■', '□', '℃']
 
@@ -162,10 +163,10 @@ def preprocess(embedding_model, local_run=False, max_sentence_len=29):
     index_db = FAISS.load_local('vector_store/index_db', embeddings)
 
     # sentence cut
-    chunk_size = 120
+    chunk_size = 100
     chunk_overlap = 20
-    sentence_splitter = RecursiveCharacterTextSplitter(
-        separators=["。\n", "\n\n", ""],
+    sentence_splitter = ChineseRecursiveTextSplitter(
+        separators=["。\n", "\n\n", "。"],
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         length_function=len,
@@ -183,10 +184,12 @@ def preprocess(embedding_model, local_run=False, max_sentence_len=29):
         # doc.page_content > 50 means the doc is a complete sentence, but cur_doc_content is not
         if len(doc.page_content) >= 50:
             doc.page_content = cur_doc_content
+            doc.page_content = doc.page_content.replace(" ", "")
             doc.page_content = doc.page_content.replace("<SEP>", "")
             doc.page_content = doc.page_content.replace("■", "")
             doc.page_content = doc.page_content.replace("□", "")
             doc.page_content = doc.page_content.strip("。\n")
+            doc.page_content += "。"
             doc.metadata['index'] = len(clean_sent_docs)
             clean_sent_docs.append(doc)
             cur_doc_content = ""
