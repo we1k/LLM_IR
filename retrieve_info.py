@@ -27,8 +27,8 @@ endpoint_url = ("http://127.0.0.1:29501")
 
 def run_query(args):
     if args.local_run == True:
-        args.test = True
-        question_path = "data/test_question.json"
+        question_path = "data/all_question.json"
+        # question_path = "data/test_question.json"
     else:
         question_path = "/tcdata/test_question.json"
 
@@ -57,22 +57,6 @@ def run_query(args):
             model_kwargs={"device": "cuda"} ,
             encode_kwargs={"normalize_embeddings": False})
 
-    if args.test:
-        config = {
-            "temperature": args.temperature,
-            "top_p": args.top_p,
-            # "max_new_tokens": 48,
-            "max_tokens": 48,
-        }
-
-        # construct a LLMchain
-        llm = ChatGLM(
-            endpoint_url=endpoint_url,
-            history=[],
-            **config,
-            model_kwargs={"sample_model_args": False},
-        )
-        QA_chain = LLMChain(llm=llm, prompt=template_manager.get_template(0), verbose=args.test==True)
 
     # adding jieba dict
     jieba.load_userdict("data/keywords.txt")
@@ -126,19 +110,9 @@ def run_query(args):
         # 通过关键词检索 subsection
         for keyword in keywords:
             if keyword in all_keywords:
-                section_retriever = content_db.as_retriever(search_kwargs={'k': 2, "filter": {"keyword": keyword}})
+                section_retriever = content_db.as_retriever(search_kwargs={'k': 1, "filter": {"subkeyword": keyword}})
                 
-        # keywords embedding
-        # for keyword in list(set([k[0] for k in keywords])):
-        #     if keyword in section_keys:
-        #         ret_docs = content_db.similarity_search(question, filter={"keyword": keyword}, k=2)
-        #     elif keyword in subsection_keys:
-        #         ret_docs = content_db.similarity_search(question, filter={"subkeyword": keyword}, k=2)
-        #     for doc in ret_docs:
-        #         related_sections += [doc.page_content]
 
-
-        ### TODO:需要设置阈值
         # content_db.similarity_search_with
         ret_docs_with_score = content_db.similarity_search_with_relevance_scores(question, k=2)
         ret_docs = []
@@ -160,7 +134,6 @@ def run_query(args):
         # using fuzzywuzzy to rerank related str
         _related_sents = [str for str, score in process.extractBests(query=question, choices=related_sents, scorer=adjusted_ratio_fn)]
 
-        print(_related_sents)
         related_sents = []
         for i in range(len(_related_sents)):
             concat_sent = ""
@@ -179,21 +152,13 @@ def run_query(args):
         
         related_str = related_sections + related_sents
 
-        if args.local_run:
-            result = QA_chain(dict(question=question, related_str="\n".join(related_str)))
-            sample = {"question": question, "keyword": keywords, "related_str": related_str, "answer": result['text']}
-        else:
-            sample = {"question": question, "keyword": keywords, "related_str": related_str}
+        sample = {"question": question, "keyword": keywords, "related_str": related_str}
 
         answers.append(sample)
 
     
-    if args.test == True:
-        with open(f"result/test.json", 'w', encoding='utf-8') as f:
-            json.dump(answers, f, ensure_ascii=False, indent=4)
-    else:
-        with open(f"result/related_str.json", 'w', encoding='utf-8') as f:
-            json.dump(answers, f, ensure_ascii=False, indent=4)
+    with open(f"result/related_str.json", 'w', encoding='utf-8') as f:
+        json.dump(answers, f, ensure_ascii=False, indent=4)
 
 if __name__ == '__main__':
     parser = ArgumentParser()

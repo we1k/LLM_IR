@@ -62,8 +62,8 @@ def main(opt):
         """请尽可能简要地总结先前的回答，只保留与问题最相关的部分，在总结中不要重复问题。问题是：{} 答案是："""]
 
     max_length = 4096
-    top_p      = 0.6
-    temperature= 0.5
+    top_p       = opt.top_p
+    temperature = opt.temperature
     params = {"max_length":max_length,"top_p":top_p,"temperature":temperature}
 
     seed_everything(2023)
@@ -86,6 +86,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--test', action="store_true", help="whether to test")
     parser.add_argument('--output', type=str, default='chatglm')
+    parser.add_argument("--temperature", default=0.5, type=float)
+    parser.add_argument("--top_p", default=0.6, type=float)
     parser.add_argument("--local_run", action="store_true")
     opt = parser.parse_args()
     main(opt)

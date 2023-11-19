@@ -75,6 +75,8 @@ if __name__ == '__main__':
     parser.add_argument('--test', action="store_true", help="whether to test")
     parser.add_argument('--output', type=str, default='baichuan')
     parser.add_argument('--device', type=int, default=0)
+    parser.add_argument("--temperature", default=0.5, type=float)
+    parser.add_argument("--top_p", default=0.6, type=float)
     parser.add_argument("--local_run", action="store_true")
     opt = parser.parse_args()
     main(opt)

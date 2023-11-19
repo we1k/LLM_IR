@@ -59,8 +59,8 @@ def main(opt):
         """请尽可能简要地总结先前的回答，只保留与问题最相关的部分，在总结中不要重复问题。问题是：{} 答案是："""]
 
     max_new_tokens = 4096
-    top_p      = 0.6
-    temperature= 0.5
+    top_p       = opt.top_p
+    temperature = opt.temperature
     params = {"max_new_tokens":max_new_tokens,"top_p":top_p,"temperature":temperature}
 
     seed_everything(2023)
@@ -81,6 +81,8 @@ if __name__ == '__main__':
     parser.add_argument('--test', action="store_true", help="whether to test")
     parser.add_argument('--output', type=str, default='qianwen')
     parser.add_argument('--device', type=int, default=0)
+    parser.add_argument("--temperature", default=0.5, type=float)
+    parser.add_argument("--top_p", default=0.6, type=float)
     parser.add_argument("--local_run", action="store_true")
     opt = parser.parse_args()
     main(opt)
