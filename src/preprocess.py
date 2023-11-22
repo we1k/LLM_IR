@@ -11,18 +11,22 @@ from langchain.vectorstores import FAISS, Chroma
 from src.embeddings import BGEpeftEmbedding
 from src.text_splitter import ChineseRecursiveTextSplitter
 
-DELIMITER = ['，', '。', '；', '–', '：', '！', '-', '、', '■', '□', '℃']
+MAX_KEYWORD_LEN = 13
+DELIMITER = ['，', ',', '。', '；', '–', '：', '！', '-', '、', '■', '□', '℃',
+             '.', '•']
 
 def save_docs_to_jsonl(array, file_path:str)->None:
     with open(file_path, 'w') as jsonl_file:
         for doc in array:
             jsonl_file.write(json.dumps(doc.dict(), ensure_ascii=False) + '\n')
 
+def contains_chinese_characters(text):
+    pattern = re.compile(r'[\u4e00-\u9fff]')  # 匹配汉字的 Unicode 范围
+    match = pattern.search(text)
+    return match is not None
 
-def get_keywords_and_first_page():
+def get_keywords(file_path='pdf_output/trainning_data.outline'):
     # File path to the outline document
-    file_path = 'pdf_output/trainning_data.outline'
-
     # Read the entire file content
     with open(file_path, 'r') as file:
         file_content = file.read()
@@ -35,8 +39,7 @@ def get_keywords_and_first_page():
 
     chapter_to_number_dict = {detail[1].strip(): int(detail[0]) for detail in chapter_details}
     chapter_names = [k.replace("&amp;", "&").strip() for k, v in chapter_to_number_dict.items()]
-    first_page_id = list(chapter_to_number_dict.values())[0]
-    return chapter_names, first_page_id
+    return chapter_names
 
 
 def build_sections(keywords, max_sentence_len=29):
@@ -48,7 +51,7 @@ def build_sections(keywords, max_sentence_len=29):
     with open("data/all.txt", 'r', encoding='UTF-8') as f:
         for line in f.readlines():
             # 去除目录
-            if ". . . ." in line or "目录" in line:
+            if ". . . ." in line or "目录" in line or "...." in line:
                 continue
             if line.strip() in keywords:
                 if chapter_name != "":
@@ -66,18 +69,22 @@ def build_sections(keywords, max_sentence_len=29):
         subsection_dict = {}
         text = text.replace("点击\n", "点击")
         text = text.replace("\n-", "-")
+        text = text.replace("\n“\n", "")
+        text = text.replace("\n”\n", "")
+        text = text.replace("\\", "")
+        text = re.sub(r"\n\d+km/h\n", "", text)
         text = text.replace("的\n", "的")
         sentences = text.split('\n')
         
         keyword = chapter_name
         cur_chunk = chapter_name + "\n"
         for sentence in sentences:
-            sentence = sentence.strip("<SEP>")
+            sentence = sentence.strip("<SEP>").replace('"', '').replace(" ", "")
             if len(sentence) == 0 or sentence.isdigit():
                 continue
             # 大概率是目录
             # 可能包含章节数字 1.1 标题
-            elif re.match(r"^\d*(\.\d+)?.*$", sentence) and not any(it in sentence for it in DELIMITER) and not sentence.startswith("0") and 1< len(sentence) <= max_sentence_len - 1:
+            elif re.match(r"^\d*(\.\d+)?.*$", sentence) and not any(it in sentence for it in DELIMITER) and not sentence.startswith("0") and 1< len(sentence) <= MAX_KEYWORD_LEN:
                 if cur_chunk.strip("\n") != keyword:
                     subsection_dict[keyword] = cur_chunk
                 keyword = sentence
@@ -99,25 +106,39 @@ def build_sections(keywords, max_sentence_len=29):
             if len(text_chunk.strip("<SEP>")) > 0 and not text_chunk.isalpha() > 0:
                 # skip special char
                 text_chunk = text_chunk.replace("<SEP>", "")
+                # skip too short section (maybe a table content)
+                # or section name didn't contain chinese characters
+                if len(text_chunk.replace("\n", "")) - len(subkeyword) < 5 or not contains_chinese_characters(subkeyword):
+                    continue
                 section_docs.append(Document(page_content=text_chunk, metadata={"keyword": chapter_name, "subkeyword": subkeyword}))
         
     return section_docs
 
-def preprocess(embedding_model, local_run=False, max_sentence_len=29):
-    keywords, first_page_id = get_keywords_and_first_page()
-
+def preprocess(embedding_model, local_run=False, max_sentence_len=20):
+    keywords = get_keywords()
+    print(keywords)
     with open("data/raw.txt", 'r', encoding='UTF-8') as f:
         text = f.read()
 
-    # 去掉目录 之前所有的内容
-    text = re.split(r'!\[\]\(bg{:x}\.png\)'.format(first_page_id), text)[1]
-
-    sections = re.split(r'!\[\]\(.+?\)', text)
+    pages = re.split(r'!\[\]\(.+?\)', text)
     # 去掉页眉和页码
-    for i in range(len(sections)):
-        sections[i] = re.sub(rf'^.*?\n{i+first_page_id}\n', "", sections[i], flags=re.DOTALL)
+    for i in range(len(pages)):
+        lines, idx = pages[i].split("\n"), 0
+        lines = [line for line in lines if len(line.strip()) > 0]
+        while len(lines) > 0 and not contains_chinese_characters(lines[-1]):
+            lines.pop(-1)
+        
+        while 0 <= idx < len(lines) and lines[idx].strip().isdigit():
+            idx += 1
+        pages[i] = "\n".join(lines[idx+2:])
+        # pages[i] = re.sub(rf'^.*?\n{i}\n', "", pages[i], flags=re.DOTALL)
 
-    all_text = "".join(sections).replace("\n\n", "\n")
+        # 去掉图片的编号
+        pages[i] = re.sub(r"[A-Za-z0-9]+-[A-Za-z0-9]+\n", "", pages[i])
+        
+        pages[i] = pages[i]
+
+    all_text = "".join(pages).replace("\n\n", "\n")
     with open("data/all.txt", 'w', encoding='UTF-8') as f:
         f.write(all_text)
 
@@ -188,6 +209,7 @@ def preprocess(embedding_model, local_run=False, max_sentence_len=29):
             doc.page_content = doc.page_content.replace("<SEP>", "")
             doc.page_content = doc.page_content.replace("■", "")
             doc.page_content = doc.page_content.replace("□", "")
+            doc.page_content = doc.page_content.replace("\n", "")
             doc.page_content = doc.page_content.strip("。\n")
             doc.page_content += "。"
             doc.metadata['index'] = len(clean_sent_docs)

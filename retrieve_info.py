@@ -141,7 +141,7 @@ def run_query(args):
             cur_idx = ret_doc.metadata["index"]
             pivot_keyword = ret_doc.metadata["subkeyword"]
             while True:
-                if len(concat_sent) > 256 or id2sent_dict[cur_idx].metadata["subkeyword"] != pivot_keyword:
+                if cur_idx not in id2sent_dict or len(concat_sent) > 256 or id2sent_dict[cur_idx].metadata["subkeyword"] != pivot_keyword:
                     break
                 concat_sent += id2sent_dict[cur_idx].page_content
                 cur_idx += 1
@@ -167,7 +167,7 @@ if __name__ == '__main__':
     parser.add_argument("--temperature", default=0.5, type=float)
     parser.add_argument("--top_p", default=0.6, type=float)
     parser.add_argument("--max_num_related_str", default=5, type=int)
-    parser.add_argument("--max_sentence_len", default=29, type=int)
+    parser.add_argument("--max_sentence_len", default=19, type=int)
     parser.add_argument("--local_run", action="store_true")
     parser.add_argument("--embedding_model", default="stella")
     args = parser.parse_args()

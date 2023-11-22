@@ -116,8 +116,8 @@ def clean_related_str(related_str:List, keyword: Optional[List]=[], threshold=-8
     ## adding concat sentence
     # for i in range(len(related_str)):
     #     related_str[i] += f"第{i}段相关材料" + related_str[i]
-    for str in related_str:
-        print(str)
+    # for str in related_str:
+    #     print(str)
     return related_str
 
 
