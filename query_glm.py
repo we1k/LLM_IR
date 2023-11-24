@@ -14,7 +14,7 @@ def get_answer(data,prompt_template,chatglm,tokenizer,params,abbre_dict,
 
     inputs = {
         "question": clean_question(data["question"],abbre_dict),
-        "info":clean_related_str(data["question"],data["related_str"],data["keyword"])
+        "info":clean_related_str(data["related_str"])
         # "info": data["related_str"]
         }
 

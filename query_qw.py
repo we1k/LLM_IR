@@ -10,13 +10,11 @@ from src.utils import clean_question,clean_related_str,seed_everything,write_jso
 def make_context(
     tokenizer,
     query: str,
-    history,
     system: str = "",
     max_window_size: int = 6144,
     chat_format: str = "chatml",
 ):
-    if history is None:
-        history = []
+    history = []
 
     if chat_format == "chatml":
         im_start, im_end = "<|im_start|>", "<|im_end|>"
@@ -150,7 +148,7 @@ def get_answer(datas,prompt_template,model,tokenizer,params,abbre_dict) -> str:
     for data in datas:
         inputs = {
             "question": clean_question(data["question"],abbre_dict),
-            "info":clean_related_str(data["question"],data["related_str"],data["keyword"])
+            "info":clean_related_str(data["related_str"])
             }
         
         user_info = ""
@@ -232,11 +230,15 @@ def main(opt):
     batch_size = 2
     results = []
     for i in trange(0,len(datas),batch_size,desc="question"):
-        ret = get_answer(datas[i:i+batch_size],prompt_template,model,tokenizer,params,abbre_dict)
-        for j in range(batch_size):
-            sample = {"question": datas[i+j]["question"], "answer_1": ret[j]}
+        if i+batch_size > len(datas):
+            data = datas[i:]
+        else:
+            data = datas[i:i+batch_size]
+
+        ret = get_answer(data,prompt_template,model,tokenizer,params,abbre_dict)
+        for j in range(len(data)):
+            sample = {"question": data[j]["question"], "answer_1": ret[j]}
             results.append(sample)
-            # print(sample)
 
     if opt.test == False :
         write_json(results=results,output_path="result/" + opt.output + ".json")

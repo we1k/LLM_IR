@@ -15,7 +15,7 @@ def get_answer(data,prompt_template,chatglm,tokenizer,abbre_dict,
 
     inputs = {
         "question": clean_question(data["question"], abbre_dict),
-        "info":clean_related_str(data["question"],data["related_str"],data["keyword"])
+        "info":clean_related_str(data["related_str"])
         }
 
     system_info = {"role": "system", "content": "你是一位智能汽车说明的问答助手，你将根据节选的说明书的信息，完整地回答问题。"}
@@ -45,8 +45,14 @@ def main(opt):
     
     tokenizer = AutoTokenizer.from_pretrained(chatglm_path, use_fast=False, trust_remote_code=True)
     chatglm = AutoModelForCausalLM.from_pretrained(chatglm_path,device_map=device, torch_dtype=torch.bfloat16, trust_remote_code=True)
-    chatglm.generation_config = GenerationConfig.from_pretrained(chatglm_path)
+    max_new_tokens = 4096
+    top_p       = opt.top_p
+    temperature = opt.temperature
+    params = {"max_new_tokens":max_new_tokens,"top_p":top_p,"temperature":temperature}
+
+    chatglm.generation_config = GenerationConfig.from_pretrained(chatglm_path,**params)
     chatglm = chatglm.eval()
+    
     if opt.test:
         data_path = "result/related_str_test.json"
     else:
