@@ -10,6 +10,7 @@ from langchain.vectorstores import FAISS, Chroma
 
 from src.embeddings import BGEpeftEmbedding
 from src.text_splitter import ChineseRecursiveTextSplitter
+from src.utils import save_docs_to_jsonl, load_docs_from_jsonl
 
 MAX_KEYWORD_LEN = 13
 DELIMITER = ['，', ',', '。', '；', '–', '：', '！', '-', '、', '■', '□', '℃',
@@ -116,7 +117,7 @@ def build_sections(keywords, max_sentence_len=29):
 
 def preprocess(embedding_model, local_run=False, max_sentence_len=20):
     keywords = get_keywords()
-    print(keywords)
+    # print(keywords)
     with open("data/raw.txt", 'r', encoding='UTF-8') as f:
         text = f.read()
 
@@ -144,7 +145,10 @@ def preprocess(embedding_model, local_run=False, max_sentence_len=20):
 
     section_docs = build_sections(keywords, max_sentence_len)
 
-    save_docs_to_jsonl(section_docs, "doc/section_docs.jsonl")
+    # section_docs_tmp =  load_docs_from_jsonl("doc/section_docs_1.jsonl")
+    # section_docs += section_docs_tmp
+    # save_docs_to_jsonl(section_docs, "doc/section_docs.jsonl")
+    section_docs = load_docs_from_jsonl("doc/section_docs.jsonl")
 
     all_keywords = [doc.metadata["keyword"] for doc in section_docs] + [doc.metadata["subkeyword"] for doc in section_docs]
     all_keywords = list(set(all_keywords))
@@ -156,7 +160,10 @@ def preprocess(embedding_model, local_run=False, max_sentence_len=20):
     # get retriever !!
     # load in embedding model
     if "bge" in embedding_model:
-        model_name = "/app/models/bge-large-zh-v1.5"
+        if local_run:
+            model_name = "/home/lzw/.hf_models/bge-large-zh-v1.5"
+        else:
+            model_name = "/app/models/bge-large-zh-v1.5"
         embeddings = BGEpeftEmbedding(model_name)
     elif "stella" in embedding_model:
         if local_run:
@@ -184,10 +191,9 @@ def preprocess(embedding_model, local_run=False, max_sentence_len=20):
     index_db = FAISS.load_local('vector_store/index_db', embeddings)
 
     # sentence cut
-    chunk_size = 100
+    chunk_size = 120
     chunk_overlap = 20
     sentence_splitter = ChineseRecursiveTextSplitter(
-        separators=["。\n", "\n\n", "。"],
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         length_function=len,
@@ -205,11 +211,10 @@ def preprocess(embedding_model, local_run=False, max_sentence_len=20):
         # doc.page_content > 50 means the doc is a complete sentence, but cur_doc_content is not
         if len(doc.page_content) >= 50:
             doc.page_content = cur_doc_content
-            doc.page_content = doc.page_content.replace(" ", "")
+            # doc.page_content = doc.page_content.replace(" ", "")
             doc.page_content = doc.page_content.replace("<SEP>", "")
             doc.page_content = doc.page_content.replace("■", "")
             doc.page_content = doc.page_content.replace("□", "")
-            doc.page_content = doc.page_content.replace("\n", "")
             doc.page_content = doc.page_content.strip("。\n")
             doc.page_content += "。"
             doc.metadata['index'] = len(clean_sent_docs)

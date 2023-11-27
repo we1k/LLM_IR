@@ -82,45 +82,6 @@ def normalized_question(question):
     return question
 
 
-def clean_related_str(related_str:List, keyword: Optional[List]=[], threshold=-80):
-    """
-        Input:
-            related_str: List[str]
-        Return:
-            List[str]
-    """
-    if len(related_str) == 1:
-        return related_str
-
-    ## remove previous section (if it contains the keyword)
-    if len(keyword) > 0 and keyword[0][1] > threshold:
-        potential_section = keyword[0][0] + "\n"
-        for i in range(len(related_str)):
-            if potential_section in related_str[i]:
-                related_str[i] = potential_section + potential_section.join(related_str[i].split(potential_section)[1:])
-            
-    ## remove duplicate
-    tmp_str = "<BOS>。\n".join(related_str)
-    parts = tmp_str.split("。\n")
-    seen = set()
-    deduplicated_parts = []
-    # 去重，同时保证去重后的顺序不变
-    for part in parts:
-        if part not in seen:
-            seen.add(part)
-            deduplicated_parts.append(part)
-    tmp_str = "。\n".join(deduplicated_parts)
-    related_str = tmp_str.split("<BOS>")
-    related_str = [str.strip("。\n") for str in related_str]
-
-    ## adding concat sentence
-    # for i in range(len(related_str)):
-    #     related_str[i] += f"第{i}段相关材料" + related_str[i]
-    # for str in related_str:
-    #     print(str)
-    return related_str
-
-
 def seed_everything(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -130,6 +91,8 @@ def seed_everything(seed):
     torch.cuda.manual_seed_all(seed)
 
 def adjusted_ratio_fn(str1, str2):
+    if len(str1) + len(str2) == 0:
+        return 0
     # 根据字符串长度计算一个权重，用于调整相似度得分
     len_weight = min(len(str1), len(str2)) / max(len(str1), len(str2), 1)
     
@@ -140,7 +103,7 @@ def adjusted_ratio_fn(str1, str2):
     score = similarity_score * len_weight
     return score
 
-def clean_related_str(question,related_str, keyword, threshold=-80):
+def clean_related_str(related_str, threshold=-80):
     """
         Input:
             related_str: List[str]
@@ -150,18 +113,9 @@ def clean_related_str(question,related_str, keyword, threshold=-80):
     if len(related_str) == 1:
         return related_str
 
-    # ## remove previous section (if it contains the keyword)
-    # if len(keyword) > 0 and keyword[0][1] > threshold:
-    #     potential_section = keyword[0][0] + "\n"
-    #     for i in range(len(related_str)):
-    #         if potential_section in related_str[i]:
-    #             related_str[i] = potential_section + potential_section.join(related_str[i].split(potential_section)[1:])
-            
     ## remove duplicate
     tmp_str = "<BOS>\n".join(related_str)
     parts = tmp_str.split("\n")
-    # print(parts)
-    # print("--------------------------------")
     seen = set()
     deduplicated_parts = []
     # 去重，同时保证去重后的顺序不变
@@ -173,7 +127,7 @@ def clean_related_str(question,related_str, keyword, threshold=-80):
             continue
         if len(seen) > 0:
             _,max_score = process.extractOne(query=nobospart, choices=list(seen), scorer=adjusted_ratio_fn)
-            if max_score > 95:
+            if max_score > 85:
                 # print("删除句子",nobospart)
                 continue
         seen.add(nobospart)
@@ -228,3 +182,27 @@ def write_json(results,output_path):
     # 写入新的JSON文件
     with open(output_path, 'w', encoding="utf-8") as file:
         json.dump(results, file,ensure_ascii=False,indent=4)
+
+
+def remove_duplicate_strs(strings):
+    if len(strings) == 1:
+        return strings[0]
+
+    unique_strings = [strings[0]]
+    for string in strings[1:]:
+        # 检查当前字符串是否与已有唯一字符串组中的任意一个相似
+        _,max_score = process.extractOne(query=string, choices=unique_strings, scorer=adjusted_ratio_fn)
+        if max_score > 85:
+            continue
+        else:
+            unique_strings.append(string)
+
+    ret_strs = clean_related_str(unique_strings)
+    return "\n".join(ret_strs)
+
+if __name__ == "__main__":
+    strs = [
+        '小计里程\n小计里程显示上次清零后车辆的行驶里程。小计里程常显于液晶左下角，与TRIP1界面中的小计里程为同一信息。激活方向盘按键复用后，在该界面下可以通过长按TRIP键或者长按方向盘的MODE按键单独对小计里程显示清零。\n仪表有自动记忆小计里程的功能。关闭启动开关，小计里程不会自动清零，但断开蓄电池后，小计里程将自动清零。\n小计里程界面显示，每0.1km更新一次。显示范围为0000.0~9999.9km，当达到最大值后，小计里程显示从0.0开始重新计算。',
+        '小计里程\n小计里程显示上次清零后车辆的行驶里程。该界面下可以通过长按组合开关左侧TRI键，或者长按方向盘中的MODE按键（激活方向盘复用）单独对小计里程显示清零。仪表有自动记忆小计里程的功能。关闭启动开关，小计里程不会自动清零，但断开蓄电池后，小计里程将自动清零。\n小计里程界面显示，每0.1km更新一次。显示范围为0~9999.9km，当达到最大值后，小计里程显示从0.0开始重新计算。\n'
+        ]
+    print(remove_duplicate_strs(strs))
