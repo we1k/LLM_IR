@@ -127,7 +127,7 @@ def clean_related_str(related_str, threshold=-80):
             continue
         if len(seen) > 0:
             _,max_score = process.extractOne(query=nobospart, choices=list(seen), scorer=adjusted_ratio_fn)
-            if max_score > 85:
+            if max_score > 75:
                 # print("删除句子",nobospart)
                 continue
         seen.add(nobospart)
@@ -192,7 +192,7 @@ def remove_duplicate_strs(strings):
     for string in strings[1:]:
         # 检查当前字符串是否与已有唯一字符串组中的任意一个相似
         _,max_score = process.extractOne(query=string, choices=unique_strings, scorer=adjusted_ratio_fn)
-        if max_score > 85:
+        if max_score > 75:
             continue
         else:
             unique_strings.append(string)

@@ -148,7 +148,7 @@ def get_answer(datas,prompt_template,model,tokenizer,params,abbre_dict) -> str:
     for data in datas:
         inputs = {
             "question": clean_question(data["question"],abbre_dict),
-            "info":clean_related_str(data["related_str"])
+            "info":data["related_str"]
             }
         
         user_info = ""
@@ -224,9 +224,9 @@ def main(opt):
         json_data = file.read()
     datas = json.loads(json_data)
 
-    prompt_template = ["""你是一位智能汽车使用说明的问答助手，现在需要从已有信息保留与问题最相关的部分，简要地回答问题，回答问题时最好保留原文的风格。问题是：{} \n{}答案是：""",]
+    prompt_template = ["""根据已有信息与问题最相关的部分，简要地回答问题，问题是：{} \n{}答案是：""",]
     
-    seed_everything(2023)
+    seed_everything(opt.seed)
     batch_size = 2
     results = []
     for i in trange(0,len(datas),batch_size,desc="question"):
@@ -248,6 +248,7 @@ if __name__ == '__main__':
     parser.add_argument('--test', action="store_true", help="whether to test")
     parser.add_argument('--output', type=str, default='qianwen')
     parser.add_argument('--device', type=int, default=0)
+    parser.add_argument('--seed', type=int, default=2023)
     parser.add_argument("--temperature", default=0.5, type=float)
     parser.add_argument("--top_p", default=0.6, type=float)
     parser.add_argument("--local_run", action="store_true")

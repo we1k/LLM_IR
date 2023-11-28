@@ -14,7 +14,7 @@ def get_answer(data,prompt_template,chatglm,tokenizer,params,abbre_dict,
 
     inputs = {
         "question": clean_question(data["question"],abbre_dict),
-        "info":clean_related_str(data["related_str"])
+        "info":data["related_str"]
         # "info": data["related_str"]
         }
 
@@ -66,7 +66,7 @@ def main(opt):
     temperature = opt.temperature
     params = {"max_length":max_length,"top_p":top_p,"temperature":temperature}
 
-    seed_everything(2023)
+    seed_everything(opt.seed)
     results = []
     for data in tqdm(datas,desc="question"):
         if check_string(data["question"],data["related_str"]):
@@ -87,6 +87,7 @@ if __name__ == '__main__':
     parser.add_argument('--test', action="store_true", help="whether to test")
     parser.add_argument('--output', type=str, default='chatglm')
     parser.add_argument("--temperature", default=0.5, type=float)
+    parser.add_argument('--seed', type=int, default=2023)
     parser.add_argument("--top_p", default=0.6, type=float)
     parser.add_argument("--local_run", action="store_true")
     opt = parser.parse_args()

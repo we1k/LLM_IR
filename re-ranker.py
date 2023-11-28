@@ -22,12 +22,13 @@ with torch.no_grad():
         inputs = {k: v.cuda() for k, v in inputs.items()}
         scores = model(**inputs, return_dict=True).logits.view(-1, ).float()
         # print(question, ":", scores)
-
         related_str_with_score = zip(related_str, scores)
-        sort_related_str = sorted(related_str_with_score, key=lambda x: x[1], reverse=True)
-
-        sample["related_str"] = clean_related_str([str for str, score in sort_related_str])[:5]
-
+        sort_related_str_with_score = sorted(related_str_with_score, key=lambda x: x[1], reverse=True)[:5]
+        # cutting least un_related_str // at least 3 related_str
+        while len(sort_related_str_with_score) > 3 and sort_related_str_with_score[-1][1] < 0:
+            sort_related_str_with_score.pop()
+        
+        sample["related_str"] = [str for str, score in sort_related_str_with_score]
         # print("=====================================")
 
 with open(f"result/related_str.json", 'w', encoding='utf-8') as f:

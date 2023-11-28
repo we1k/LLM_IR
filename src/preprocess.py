@@ -216,7 +216,6 @@ def preprocess(embedding_model, local_run=False, max_sentence_len=20):
             doc.page_content = doc.page_content.replace("■", "")
             doc.page_content = doc.page_content.replace("□", "")
             doc.page_content = doc.page_content.strip("。\n")
-            doc.page_content += "。"
             doc.metadata['index'] = len(clean_sent_docs)
             clean_sent_docs.append(doc)
             cur_doc_content = ""
