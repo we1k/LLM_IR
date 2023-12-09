@@ -3,8 +3,9 @@ echo "Good Luck!"
 # /tcdata/trainning_data.pdf
 MAX_SENTENCE_LEN=18
 THRESHOLD=-140
-TEMPERATURE=0.5
-TOP_P=0.7
+TEMPERATURE=0.7
+TOP_P=0.8
+SEED=1203
 
 INPUT_PDF_PATH="/tcdata/trainning_data.pdf"
 embedding_model="stella"
@@ -22,8 +23,6 @@ python re-ranker.py
 
 echo "Starting Generation"
 # run generation
-python query_glm.py --temperature $TEMPERATURE --top_p $TOP_P
-python query_bc.py --temperature $TEMPERATURE --top_p $TOP_P
-python query_qw.py --temperature $TEMPERATURE --top_p $TOP_P
+python query_qw.py --temperature $TEMPERATURE --top_p $TOP_P  --seed $SEED
 python src/generator.py
 cp result/submit.json /app/result.json

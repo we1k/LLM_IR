@@ -5,6 +5,7 @@ MAX_SENTENCE_LEN=18
 THRESHOLD=-140
 TEMPERATURE=0.8
 TOP_P=0.7
+SEED=42
 
 INPUT_PDF_PATH="data/trainning_data.pdf"
 embedding_model="stella"
@@ -19,7 +20,5 @@ echo "Starting Reranking"
 python re-ranker.py
 
 echo "Starting Generation"
-CUDA_VISIBLE_DEVICES=0 python query_glm.py --local_run --temperature $TEMPERATURE --top_p $TOP_P 
-CUDA_VISIBLE_DEVICES=1 python query_bc.py --local_run --temperature $TEMPERATURE --top_p $TOP_P 
-CUDA_VISIBLE_DEVICES=2 python query_qw.py --local_run --temperature $TEMPERATURE --top_p $TOP_P
+CUDA_VISIBLE_DEVICES=2 python query_qw.py --local_run --temperature $TEMPERATURE --top_p $TOP_P  --seed $SEED
 # python src/generator.py

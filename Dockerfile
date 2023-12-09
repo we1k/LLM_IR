@@ -6,6 +6,7 @@ FROM registry.cn-hangzhou.aliyuncs.com/we1k/smp_env:v0
 RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple deepspeed html2text transformers==4.34.1 langchain==0.0.312 PyPDF2 spacy
 
 RUN python -m spacy download zh_core_web_sm
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple rank_bm25
 
 COPY . /app
 WORKDIR /app
