@@ -8,8 +8,7 @@ from argparse import ArgumentParser
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores.faiss import FAISS
 from langchain.docstore.document import Document
-from langchain.llms import ChatGLM
-from langchain.chains import LLMChain
+from langchain.retrievers import BM25Retriever, EnsembleRetriever
 
 import jieba
 import jieba.analyse
@@ -20,7 +19,7 @@ from fuzzywuzzy import process
 from src.preprocess import preprocess
 from src.embeddings import BGEpeftEmbedding
 from src.llm.template_manager import template_manager
-from src.utils import normalized_question, adjusted_ratio_fn, load_docs_from_jsonl
+from src.utils import normalized_question, load_docs_from_jsonl, clean_related_str
 
 set_seed(42)
 endpoint_url = ("http://127.0.0.1:29501")
@@ -39,7 +38,10 @@ def run_query(args):
 
     # load in embedding model
     if "bge" in args.embedding_model:
-        model_name = "/app/models/bge-large-zh-v1.5"
+        if args.local_run:
+            model_name = "/home/lzw/.hf_models/bge-large-zh-v1.5"
+        else:
+            model_name = "/app/embedding_models/bge-large-zh-v1.5"
         embeddings = BGEpeftEmbedding(model_name)
     elif "stella" in args.embedding_model:
         if args.local_run:
@@ -66,7 +68,7 @@ def run_query(args):
     index_db = FAISS.load_local('vector_store/index_db', embeddings)
     content_db = FAISS.load_local('vector_store/section_db', embeddings)
     sentence_db = FAISS.load_local('vector_store/sentence_db', embeddings)
-    sentence_retriever = sentence_db.as_retriever(search_kwargs={'k': 10})
+    sentence_retriever = sentence_db.as_retriever(search_kwargs={'k': 15})
     sent_reindex_retriever = sentence_db.as_retriever(search_kwargs={'k': 1})
     answers = []
 
@@ -114,7 +116,7 @@ def run_query(args):
                 
 
         # content_db.similarity_search_with
-        ret_docs_with_score = content_db.similarity_search_with_relevance_scores(question, k=2)
+        ret_docs_with_score = content_db.similarity_search_with_relevance_scores(question, k=5)
         ret_docs = []
         for doc, score in ret_docs_with_score:
             if score > args.threshold:
@@ -126,29 +128,36 @@ def run_query(args):
         ret_docs = sentence_retriever.get_relevant_documents(question)
         related_sents = [doc.page_content for doc in ret_docs]
 
-        # remove duplicate sent
+        
+        # using fuzzywuzzy to rerank related str
+        # related_sents = [str for str, score in process.extractBests(query=question, choices=related_sents, scorer=adjusted_ratio_fn)]
+
+        # _related_sents = []
+        # for i in range(len(related_sents)):
+        #     concat_sent = ""
+        #     ret_doc = sent_reindex_retriever.get_relevant_documents(related_sents[i])[0]
+        #     cur_idx = ret_doc.metadata["index"]
+        #     pivot_keyword = ret_doc.metadata["subkeyword"]
+        #     while True:
+        #         if cur_idx not in id2sent_dict or len(concat_sent) > 768 or id2sent_dict[cur_idx].metadata["subkeyword"] != pivot_keyword:
+        #             break
+        #         concat_sent += id2sent_dict[cur_idx].page_content
+        #         cur_idx += 1
+        #     _related_sents.append(concat_sent)
+        # related_sents = related_sents[:5]
+
+
+        # adding BM25 retrieval for sent_docs
+        bm25_retriever = BM25Retriever.from_documents(sent_docs, k=10,
+            preprocess_func=lambda x: list(jieba.cut_for_search(x))
+        )
+
+        bm25_ret_docs = bm25_retriever.get_relevant_documents(norm_question)
+        related_sents += [doc.page_content for doc in bm25_ret_docs]
+        # remove duplicate sent docs
         tmp_sents = []
         [tmp_sents.append(i) for i in related_sents if not i in tmp_sents]
         related_sents = tmp_sents
-        
-        # using fuzzywuzzy to rerank related str
-        _related_sents = [str for str, score in process.extractBests(query=question, choices=related_sents, scorer=adjusted_ratio_fn)]
-
-        related_sents = []
-        for i in range(len(_related_sents)):
-            concat_sent = ""
-            ret_doc = sent_reindex_retriever.get_relevant_documents(_related_sents[i])[0]
-            cur_idx = ret_doc.metadata["index"]
-            pivot_keyword = ret_doc.metadata["subkeyword"]
-            while True:
-                if cur_idx not in id2sent_dict or len(concat_sent) > 256 or id2sent_dict[cur_idx].metadata["subkeyword"] != pivot_keyword:
-                    break
-                concat_sent += id2sent_dict[cur_idx].page_content
-                cur_idx += 1
-            related_sents.append(concat_sent)
-
-        
-        related_sents = related_sents[:args.max_num_related_str-2]
         
         related_str = related_sections + related_sents
 

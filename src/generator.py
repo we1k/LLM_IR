@@ -27,7 +27,7 @@ for items in zip(*datas):
         "question": items[0].get("question"),
         "answer_1": "",
         "answer_2": "",
-        "answer_3": "",
+        "answer_3": "无答案",
     }
     # Assuming the question is the same in all files
     for i, item in enumerate(items):
