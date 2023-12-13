@@ -3,9 +3,9 @@ echo "Good Luck!"
 # /tcdata/trainning_data.pdf
 MAX_SENTENCE_LEN=18
 THRESHOLD=-140
-TEMPERATURE=0.8
-TOP_P=0.8
-SEED=1203
+TEMPERATURE=0.9
+TOP_P=0.95
+SEED=520
 PROMPT="根据已有信息与问题最相关的部分，完整的回答问题。"
 
 

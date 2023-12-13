@@ -112,14 +112,11 @@ def get_answer(datas,prompt_template,model,tokenizer,params,abbre_dict) -> str:
         )
 
         # 无答案直接跳过
-        all_raw_text.append(raw_text)
-        all_context_token.append(context_token)
-        # if data['dont_answer'] == False:
-        #     all_text_ids.append(i)
-        #     all_raw_text.append(raw_text)
-    with open("result/raw_text.json", "w", encoding="utf-8") as file:
-        json.dump(all_raw_text, file, ensure_ascii=False, indent=4)
+        if data['dont_answer'] == False:
+            all_text_ids.append(i)
+            all_raw_text.append(raw_text)
 
+    params.pop("max_length")
     sample_params = SamplingParams(**params, stop=["<|im_end|>"])
     preds = model.generate(all_raw_text, sample_params)
     # writing back
@@ -140,7 +137,7 @@ def main(opt):
     print(model_name_or_path)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True, )
-    max_tokens = 4096
+    max_tokens = 2048
     params = {"max_length":1024, "max_tokens":max_tokens,"top_p":opt.top_p,"temperature":opt.temperature}
     generation_config = GenerationConfig.from_pretrained(model_name_or_path, pad_token_id=tokenizer.pad_token_id, **params, trust_remote_code=True)
 
