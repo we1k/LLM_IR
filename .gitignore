@@ -18,5 +18,9 @@ vector_store/
 result/*
 doc/*
 tcdata/
+book/
+rerank_model
+grid_search
+
 
 TODO

@@ -3,6 +3,10 @@ import json
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from src.utils import clean_related_str
 
+UPPER_BOUND = 10
+LOWER_BOUND = -10
+
+
 model_path = "./rerank_model/bge-reranker-large"
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 model = AutoModelForSequenceClassification.from_pretrained(model_path).cuda()
@@ -28,6 +32,9 @@ with torch.no_grad():
         while len(sort_related_str_with_score) > 3 and sort_related_str_with_score[-1][1] < 0:
             sort_related_str_with_score.pop()
         
+        # 无答案判断
+        sample["no_answer"] = True if sort_related_str_with_score[0][1] < UPPER_BOUND else False
+        sample["dont_answer"] = True if sort_related_str_with_score[0][1] < LOWER_BOUND else False
         sample["related_str"] = [str for str, score in sort_related_str_with_score]
         # print("=====================================")
 

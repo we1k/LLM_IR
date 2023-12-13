@@ -8,7 +8,7 @@ import argparse
 from vllm import LLM, SamplingParams
 from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig 
 
-
+from src.prompt_template import PROMPT_TEMPLATE
 from src.utils import clean_question,clean_related_str,seed_everything,write_json
 
 def make_context(
@@ -85,30 +85,47 @@ def make_context(
 
 def get_answer(datas,prompt_template,model,tokenizer,params,abbre_dict) -> str:
     all_raw_text = []
-    for data in datas:
+    all_context_token = []
+    all_text_ids = []
+    output = ["无答案"] * len(datas)
+    for i, data in enumerate(datas):
         inputs = {
             "question": clean_question(data["question"],abbre_dict),
             "info":data["related_str"]
             }
         
         user_info = ""
-        for i in range(len(inputs["info"])):
-            user_info += "第{}条相关信息：\n{}\n".format(i+1,inputs["info"][i]) 
-        all_raw_text.append(prompt_template[0].format(inputs["question"],user_info))
-    
-    batch_raw_text = []
-    for q in all_raw_text:
-        raw_text, _ = make_context(
+        for j in range(len(inputs["info"])):
+            if len(user_info) + len(inputs["info"][j]) < params["max_length"]:
+                user_info += "第{}条相关信息：\n{}\n".format(j+1,inputs["info"][j]) 
+            else:
+                user_info += "第{}条相关信息：\n{}\n".format(j+1,inputs["info"][j]) 
+                user_info = user_info[:params["max_length"]]
+                break
+
+        raw_text, context_token = make_context(
             tokenizer,
-            q,
+            prompt_template.format(inputs["question"],user_info),
             system="你是一位智能汽车说明的问答助手，你将根据节选的说明书的信息，完整并简洁地回答问题。",
             max_window_size=3072,# model.generation_config.max_window_size,
             chat_format="chatml", # model.generation_config.chat_format 
         )
-        batch_raw_text.append(raw_text)
+
+        # 无答案直接跳过
+        all_raw_text.append(raw_text)
+        all_context_token.append(context_token)
+        # if data['dont_answer'] == False:
+        #     all_text_ids.append(i)
+        #     all_raw_text.append(raw_text)
+    with open("result/raw_text.json", "w", encoding="utf-8") as file:
+        json.dump(all_raw_text, file, ensure_ascii=False, indent=4)
 
     sample_params = SamplingParams(**params, stop=["<|im_end|>"])
-    output = model.generate(batch_raw_text, sample_params)
+    preds = model.generate(all_raw_text, sample_params)
+    # writing back
+    for i, pred in enumerate(preds):
+        output[all_text_ids[i]] = pred.outputs[0].text
+
     return output
 
 def main(opt):
@@ -116,17 +133,19 @@ def main(opt):
 
     model_name_or_path = "/tcdata/qwen/Qwen-7B-Chat"
     if opt.use_14B:
-        model_name_or_path = "/tcdata/qwen/Qwen-14B-Chat-Int4"
+        # model_name_or_path = "./rerank_model/Qwen-14B-Chat-AWQ"
+        model_name_or_path = "/tcdata/qwen/Qwen-14B-Chat-AWQ"
     if opt.local_run:
         model_name_or_path = '.' + model_name_or_path
     print(model_name_or_path)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True, )
     max_tokens = 4096
-    params = {"max_tokens":max_tokens,"top_p":opt.top_p,"temperature":opt.temperature}
+    params = {"max_length":1024, "max_tokens":max_tokens,"top_p":opt.top_p,"temperature":opt.temperature}
     generation_config = GenerationConfig.from_pretrained(model_name_or_path, pad_token_id=tokenizer.pad_token_id, **params, trust_remote_code=True)
 
-    prompt_template = ["""根据已有信息与问题最相关的部分，简要地回答问题，问题是：{} \n{}答案是：""",]
+    # choose prompt
+    prompt_template = PROMPT_TEMPLATE[opt.prompt_idx]
 
     input_file = 'data/abbr2word.json'
     with open(input_file, 'r', encoding='utf-8') as file:
@@ -142,7 +161,9 @@ def main(opt):
 
     max_model_len = 2048 if opt.use_14B else 4096
 
-    llm = LLM(model=model_name_or_path, trust_remote_code=True, tensor_parallel_size=opt.tensor_parallel_size, gpu_memory_utilization=0.95, dtype="bfloat16", max_model_len=max_model_len)
+
+# model='/home/incar/newdata2/tms/llm/QWenData/Qwen-14B-Chat-Int4', tokenizer='/home/incar/newdata2/tms/llm/QWenData/Qwen-14B-Chat-Int4', tokenizer_mode=auto, revision=v1.1.8, tokenizer_revision=None, trust_remote_code=True, dtype=torch.float16, max_seq_len=2048, download_dir=None, load_format=auto, tensor_parallel_size=1, quantization=gptq, seed=0)
+    llm = LLM(model=model_name_or_path, trust_remote_code=True, tensor_parallel_size=opt.tensor_parallel_size, gpu_memory_utilization=0.5, dtype=torch.float16, max_model_len=max_model_len)
 
     outputs = get_answer(datas, prompt_template, llm, tokenizer, params, abbre_dict)
 
@@ -156,7 +177,7 @@ def main(opt):
         results.append(
             {
                 "question": datas[i]["question"],
-                "answer_1": output.outputs[0].text 
+                "answer_1": output 
             }
         )
 
@@ -167,11 +188,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--test', action="store_true", help="whether to test")
     parser.add_argument('--output', type=str, default='qianwen')
+    parser.add_argument('--prompt_idx', type=int, default=0)
     parser.add_argument('--device', type=int, default=0)
     parser.add_argument('--tensor_parallel_size', type=int, default=1)
     parser.add_argument('--seed', type=int, default=2023)
-    parser.add_argument("--temperature", default=0.5, type=float)
-    parser.add_argument("--top_p", default=0.6, type=float)
+    parser.add_argument("--temperature", default=0.8, type=float)
+    parser.add_argument("--top_p", default=0.9, type=float)
     parser.add_argument("--local_run", action="store_true")
     parser.add_argument("--use-14B", action="store_true")
     opt = parser.parse_args()
