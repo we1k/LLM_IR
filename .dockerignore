@@ -7,7 +7,6 @@ __pycache__/
 pdf_output/
 result/*
 log/*
-doc/*
 
 
 pyrightconfig.json
@@ -16,7 +15,9 @@ BM25.ipynb
 .vscode
 tcdata
 test
-models
+# models
 builder
+rerank_model
+grid_search
 
 TODO

@@ -95,9 +95,14 @@ def get_answer(datas,prompt_template,model,tokenizer,params,abbre_dict) -> str:
         
         user_info = ""
         for j in range(len(inputs["info"])):
-            user_info += "第{}条相关信息：\n{}\n".format(j+1,inputs["info"][j])
+            if len(user_info) + len(inputs["info"][j]) < params["max_length"]:
+                user_info += "第{}条相关信息：\n{}\n".format(j+1,inputs["info"][j]) 
+            else:
+                user_info += "第{}条相关信息：\n{}\n".format(j+1,inputs["info"][j]) 
+                user_info = user_info[:params["max_length"]]
+                break
 
-        raw_text, _ = make_context(
+        raw_text, context_token = make_context(
             tokenizer,
             prompt_template.format(inputs["question"],user_info),
             system="你是一位智能汽车说明的问答助手，你将根据节选的说明书的信息，完整并简洁地回答问题。",
@@ -111,6 +116,7 @@ def get_answer(datas,prompt_template,model,tokenizer,params,abbre_dict) -> str:
             all_raw_text.append(raw_text)
     
 
+    params.pop("max_length")
     sample_params = SamplingParams(**params, stop=["<|im_end|>"])
     preds = model.generate(all_raw_text, sample_params)
     # writing back
@@ -131,8 +137,8 @@ def main(opt):
     print(model_name_or_path)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True, )
-    max_tokens = 4096
-    params = {"max_tokens":max_tokens,"top_p":opt.top_p,"temperature":opt.temperature}
+    max_tokens = 2048
+    params = {"max_length":1024, "max_tokens":max_tokens,"top_p":opt.top_p,"temperature":opt.temperature}
     generation_config = GenerationConfig.from_pretrained(model_name_or_path, pad_token_id=tokenizer.pad_token_id, **params, trust_remote_code=True)
 
     # choose prompt
