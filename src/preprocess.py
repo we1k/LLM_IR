@@ -169,7 +169,7 @@ def preprocess(embedding_model, local_run=False, max_sentence_len=20):
         if local_run:
             model_name = "/home/lzw/.hf_models/stella-base-zh-v2"
         else:
-            model_name = "/app/models/stella-base-zh-v2"
+            model_name = "/app/rerank_model/stella-base-zh-v2"
         embeddings = HuggingFaceEmbeddings(
             model_name=model_name,
             model_kwargs={"device": "cuda"} ,
@@ -186,9 +186,9 @@ def preprocess(embedding_model, local_run=False, max_sentence_len=20):
     db.save_local("vector_store/section_db")
 
 
-    index_db = FAISS.from_texts(all_keywords, embeddings)
-    index_db.save_local("vector_store/index_db")
-    index_db = FAISS.load_local('vector_store/index_db', embeddings)
+    # index_db = FAISS.from_texts(all_keywords, embeddings)
+    # index_db.save_local("vector_store/index_db")
+    # index_db = FAISS.load_local('vector_store/index_db', embeddings)
 
     # sentence cut
     chunk_size = 120
@@ -199,7 +199,9 @@ def preprocess(embedding_model, local_run=False, max_sentence_len=20):
         length_function=len,
         is_separator_regex=False
     )
-
+    for doc in section_docs:
+        doc.page_content = doc.page_content.replace(" ", "")
+        
     sent_docs = sentence_splitter.split_documents(section_docs)
     
     # adding index and combine

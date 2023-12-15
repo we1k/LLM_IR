@@ -1,13 +1,10 @@
 # w/ flash-attn
-FROM registry.cn-shanghai.aliyuncs.com/we1k/irs:env
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple  transformers_stream_generator rank_bm25
-RUN apt-get -y install curl
+# FROM registry.cn-shanghai.aliyuncs.com/we1k/irs:env_2
+FROM registry.cn-shanghai.aliyuncs.com/we1k/irs:env_3
 
 COPY . /app
 WORKDIR /app
 
-RUN mkdir -p /app/models
-RUN mv /app/stella-base-zh-v2 /app/models/stella-base-zh-v2
 
 CMD ["bash", "run.sh"]
 

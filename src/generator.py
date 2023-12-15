@@ -37,6 +37,7 @@ for items in zip(*datas):
     # Assuming the question is the same in all files
     for i, item in enumerate(items):
         filtered_item[f"answer_{i+1}"] = item.get("answer_1", "").replace("\n", "")
+        filtered_item[f"answer_{i+1}"] = filtered_item[f"answer_{i+1}"].replace("•", "")
     filtered_data.append(filtered_item)
 
 # 无答案输出

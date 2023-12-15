@@ -129,11 +129,18 @@ def main(opt):
     seed_everything(opt.seed)
 
     model_name_or_path = "/tcdata/qwen/Qwen-7B-Chat"
-    if opt.use_14B:
-        # model_name_or_path = "./rerank_model/Qwen-14B-Chat-AWQ"
-        model_name_or_path = "/tcdata/qwen/Qwen-14B-Chat-AWQ"
     if opt.local_run:
-        model_name_or_path = '.' + model_name_or_path
+        model_name_or_path = "./tcdata/qwen/Qwen-7B-Chat"
+    if opt.use_14B:
+        model_name_or_path = "./rerank_model/Qwen-14B-Chat-AWQ"
+        if opt.local_run:
+            model_name_or_path = "./tcdata/qwen/Qwen-14B-Chat-AWQ"
+    if opt.use_1_8B:
+        model_name_or_path = "./rerank_model/Qwen-1_8B-Chat"
+        if opt.local_run:
+            model_name_or_path = "./tcdata/qwen/Qwen-1_8B-Chat"
+
+        # model_name_or_path = "/tcdata/qwen/Qwen-14B-Chat-AWQ"
     print(model_name_or_path)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True, )
@@ -160,7 +167,10 @@ def main(opt):
 
 
 # model='/home/incar/newdata2/tms/llm/QWenData/Qwen-14B-Chat-Int4', tokenizer='/home/incar/newdata2/tms/llm/QWenData/Qwen-14B-Chat-Int4', tokenizer_mode=auto, revision=v1.1.8, tokenizer_revision=None, trust_remote_code=True, dtype=torch.float16, max_seq_len=2048, download_dir=None, load_format=auto, tensor_parallel_size=1, quantization=gptq, seed=0)
-    llm = LLM(model=model_name_or_path, trust_remote_code=True, tensor_parallel_size=opt.tensor_parallel_size, gpu_memory_utilization=0.5, dtype=torch.float16, max_model_len=max_model_len)
+    if opt.local_run:
+        llm = LLM(model=model_name_or_path, trust_remote_code=True, tensor_parallel_size=opt.tensor_parallel_size, gpu_memory_utilization=0.5, dtype=torch.float16, max_model_len=max_model_len)
+    else:
+        llm = LLM(model=model_name_or_path, trust_remote_code=True, tensor_parallel_size=opt.tensor_parallel_size, gpu_memory_utilization=0.97, dtype=torch.float16, max_model_len=max_model_len)
 
     outputs = get_answer(datas, prompt_template, llm, tokenizer, params, abbre_dict)
 
@@ -193,5 +203,6 @@ if __name__ == '__main__':
     parser.add_argument("--top_p", default=0.9, type=float)
     parser.add_argument("--local_run", action="store_true")
     parser.add_argument("--use-14B", action="store_true")
+    parser.add_argument("--use-1_8B", action="store_true")
     opt = parser.parse_args()
     main(opt)

@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import json
 import random
 from typing import Dict, List, Tuple, Iterable, Optional
@@ -199,6 +200,17 @@ def remove_duplicate_strs(strings):
 
     ret_strs = clean_related_str(unique_strings)
     return "\n".join(ret_strs)
+
+
+def timeit(func):
+    """Decorator to measure the execution time of a function."""
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        print(f"Function {func.__name__!r} executed in {(end_time - start_time):.4f}s")
+        return result
+    return wrapper
 
 if __name__ == "__main__":
     strs = [
