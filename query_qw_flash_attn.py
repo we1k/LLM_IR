@@ -9,7 +9,7 @@ from vllm import LLM, SamplingParams
 from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig 
 
 from src.prompt_template import PROMPT_TEMPLATE
-from src.utils import clean_question,clean_related_str,seed_everything,write_json
+from src.utils import clean_question,seed_everything,write_json
 
 def make_context(
     tokenizer,
@@ -27,12 +27,9 @@ def make_context(
         nl_tokens = tokenizer.encode("\n")
 
         def _tokenize_str(role, content):
-            return f"{role}\n{content}", tokenizer.encode(
-                role, allowed_special=set()
-            ) + nl_tokens + tokenizer.encode(content, allowed_special=set())
+            return f"{role}\n{content}"
 
-        system_text, system_tokens_part = _tokenize_str("system", system)
-        system_tokens = im_start_tokens + system_tokens_part + im_end_tokens
+        system_text = _tokenize_str("system", system)
 
         raw_text = ""
         context_tokens = []
@@ -61,18 +58,7 @@ def make_context(
                 raw_text = (prev_chat + raw_text)[:max_window_size]
                 break
 
-        context_tokens = system_tokens + context_tokens
         raw_text = f"{im_start}{system_text}{im_end}" + raw_text
-        context_tokens += (
-            nl_tokens
-            + im_start_tokens
-            + _tokenize_str("user", query)[1]
-            + im_end_tokens
-            + nl_tokens
-            + im_start_tokens
-            + tokenizer.encode("assistant")
-            + nl_tokens
-        )
         raw_text += f"\n{im_start}user\n{query}{im_end}\n{im_start}assistant\n"
 
     elif chat_format == "raw":
@@ -81,9 +67,9 @@ def make_context(
     else:
         raise NotImplementedError(f"Unknown chat format {chat_format!r}")
 
-    return raw_text, context_tokens
+    return raw_text
 
-def get_answer(datas,prompt_template,model,tokenizer,params,abbre_dict) -> str:
+def get_answer(datas,prompt_template,model,tokenizer,params,abbre_dict,is_beam_search=False) -> str:
     all_raw_text = []
     all_text_ids = []
     output = ["无答案"] * len(datas)
@@ -102,7 +88,7 @@ def get_answer(datas,prompt_template,model,tokenizer,params,abbre_dict) -> str:
                 user_info = user_info[:params["max_length"]]
                 break
 
-        raw_text, context_token = make_context(
+        raw_text = make_context(
             tokenizer,
             prompt_template.format(inputs["question"],user_info),
             system="你是一位智能汽车说明的问答助手，你将根据节选的说明书的信息，完整并简洁地回答问题。",
@@ -117,7 +103,11 @@ def get_answer(datas,prompt_template,model,tokenizer,params,abbre_dict) -> str:
     
 
     params.pop("max_length")
-    sample_params = SamplingParams(**params, stop=["<|im_end|>"])
+    if is_beam_search == True:
+        # print(params)
+        sample_params = SamplingParams(**params,use_beam_search=True, stop=["<|im_end|>"])
+    else:
+        sample_params = SamplingParams(**params, stop=["<|im_end|>"])
     preds = model.generate(all_raw_text, sample_params)
     # writing back
     for i, pred in enumerate(preds):
@@ -147,6 +137,11 @@ def main(opt):
     max_tokens = 2048
     params = {"max_length":1024, "max_tokens":max_tokens,"top_p":opt.top_p,"temperature":opt.temperature}
     generation_config = GenerationConfig.from_pretrained(model_name_or_path, pad_token_id=tokenizer.pad_token_id, **params, trust_remote_code=True)
+    if opt.beam_search:
+        params["temperature"] = 0
+        params["top_p"] = 1
+        params["best_of"] = opt.best_of
+        params["n"] = 1
 
     # choose prompt
     prompt_template = PROMPT_TEMPLATE[opt.prompt_idx]
@@ -172,7 +167,7 @@ def main(opt):
     else:
         llm = LLM(model=model_name_or_path, trust_remote_code=True, tensor_parallel_size=opt.tensor_parallel_size, gpu_memory_utilization=0.97, dtype=torch.float16, max_model_len=max_model_len)
 
-    outputs = get_answer(datas, prompt_template, llm, tokenizer, params, abbre_dict)
+    outputs = get_answer(datas, prompt_template, llm, tokenizer, params, abbre_dict, opt.beam_search)
 
     # for output in outputs[:1]:
     #     prompt = output.prompt
@@ -204,5 +199,7 @@ if __name__ == '__main__':
     parser.add_argument("--local_run", action="store_true")
     parser.add_argument("--use-14B", action="store_true")
     parser.add_argument("--use-1_8B", action="store_true")
+    parser.add_argument("--beam_search", action="store_true")
+    parser.add_argument("--best_of", type=int, default=3)
     opt = parser.parse_args()
     main(opt)

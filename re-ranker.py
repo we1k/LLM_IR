@@ -1,7 +1,6 @@
 import torch
 import json
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
-from src.utils import clean_related_str
 
 UPPER_BOUND = 3
 LOWER_BOUND = -10
@@ -30,17 +29,20 @@ with torch.no_grad():
         related_str_with_score = zip(related_str, scores)
         sort_related_str_with_score = sorted(related_str_with_score, key=lambda x: x[1], reverse=True)[:5]
         # cutting least un_related_str // at least 3 related_str
-        while len(sort_related_str_with_score) > 3 and sort_related_str_with_score[-1][1] < 0:
+        while len(sort_related_str_with_score) > 3 and sort_related_str_with_score[-1][1] < 1:
+            sort_related_str_with_score.pop()
+        max_score = sort_related_str_with_score[0][1]
+        while len(sort_related_str_with_score) > 3 and max_score > 5 and  sort_related_str_with_score[-1][1] < max_score / 2:
             sort_related_str_with_score.pop()
             
         
         # 无答案判断
         sample["no_answer"] = True if sort_related_str_with_score[0][1] < UPPER_BOUND else False
         sample["dont_answer"] = True if sort_related_str_with_score[0][1] < LOWER_BOUND else False
-        sample["max_score"] = torch.cat([score.unsqueeze(0) for str, score in sort_related_str_with_score]).data.cpu().numpy().tolist()
+        # sample["max_score"] = torch.cat([score.unsqueeze(0) for str, score in sort_related_str_with_score]).data.cpu().numpy().tolist()
         sample["related_str"] = [str for str, score in sort_related_str_with_score]
-        print(len(sample["related_str"]), [score for str, score in sort_related_str_with_score])
-        print("=====================================")
+        # print(len(sample["related_str"]), [score for str, score in sort_related_str_with_score])
+        # print("=====================================")
 
 
 # with torch.no_grad():
