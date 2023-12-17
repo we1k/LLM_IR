@@ -72,7 +72,7 @@ def run_query(args):
         if args.local_run:
             model_name = "/home/lzw/.hf_models/stella-base-zh-v2"
         else:
-            model_name = "/app/models/stella-base-zh-v2"
+            model_name = "/app/rerank_model/stella-base-zh-v2"
         embeddings = HuggingFaceEmbeddings(
             model_name=model_name,
             model_kwargs={"device": "cuda"} ,

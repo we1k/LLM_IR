@@ -26,9 +26,12 @@ python3 re-ranker.py
 echo "Starting Generation"
 # run generation
 # python3 query_qw.py --temperature $TEMPERATURE --top_p $TOP_P  --seed $SEED
-python3 query_qw_flash_attn.py --temperature 0.7 --top_p 0.95 --seed 1203 --use-14B --output chatglm
-python3 query_qw_flash_attn.py --temperature $TEMPERATURE --top_p $TOP_P --seed $SEED --output baichuan
+python3 query_qw_flash_attn.py --temperature 0.7 --top_p 0.95 --seed 1203 --use-14B --output chatglm 
+python3 query_qw_flash_attn.py --temperature $TEMPERATURE --top_p $TOP_P --seed $SEED --output baichuan --beam_search --best_of 3
 python3 query_qw_flash_attn.py --temperature 0.4 --top_p 0.95 --seed 521 --use-1_8B --output qianwen --prompt_idx 2
+# python3 query_qw_flash_attn.py --temperature $TEMPERATURE --top_p $TOP_P --seed $SEED --use-14B --output chatglm
+# python3 query_qw_flash_attn.py --temperature $TEMPERATURE --top_p $TOP_P --seed $SEED --output baichuan --prompt_idx 2
+# python3 query_qw_flash_attn.py --temperature 0.4 --top_p 0.95 --seed 521 --use-1_8B --output qianwen --prompt_idx 3
 
 python3 src/generator.py
 cp result/submit.json /app/result.json

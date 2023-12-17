@@ -21,6 +21,9 @@ tcdata/
 book/
 rerank_model
 grid_search
+stella-base-zh-v2
 
-
+# test shell
+beam_search.sh
+beam_search.out
 TODO

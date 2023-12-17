@@ -15,9 +15,11 @@ BM25.ipynb
 .vscode
 tcdata
 test
+vector_store
 # models
 builder
 rerank_model
 grid_search
+stella-base-zh-v2
 
 TODO

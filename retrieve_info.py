@@ -22,7 +22,7 @@ from src.llm.template_manager import template_manager
 from src.utils import normalized_question, load_docs_from_jsonl, timeit
 
 set_seed(42)
-endpoint_url = ("http://127.0.0.1:29501")
+# endpoint_url = ("http://127.0.0.1:29501")
 
 def run_query(args):
     if args.local_run == True:
@@ -71,8 +71,8 @@ def run_query(args):
     answers = []
 
     # load in keywords and abbr2word
-    with open("data/keywords.txt", 'r', encoding='UTF-8') as f:
-        all_keywords = f.read().split("\n")
+    # with open("data/keywords.txt", 'r', encoding='UTF-8') as f:
+    #     all_keywords = f.read().split("\n")
 
     with open("data/abbr2word.json", 'r', encoding='UTF-8') as f:
         Abbr2word = json.load(f)
@@ -94,7 +94,8 @@ def run_query(args):
         # 替换缩写
         for k, v in Abbr2word.items():
             question = question.replace(k, v+f"({k})")
-            question = question.replace(v, v+f"({k})")
+            if f"{v}({k})" not in question:
+                question = question.replace(v, v+f"({k})")
 
         # section db
         norm_question = normalized_question(question)
@@ -150,8 +151,8 @@ def run_query(args):
     with open(f"result/related_str.json", 'w', encoding='utf-8') as f:
         json.dump(answers, f, ensure_ascii=False, indent=4)
     # TODO:TEST
-    with open(f"result/unsort_related_str.json", 'w', encoding='utf-8') as f:
-        json.dump(answers, f, ensure_ascii=False, indent=4)
+    # with open(f"result/unsort_related_str.json", 'w', encoding='utf-8') as f:
+    #     json.dump(answers, f, ensure_ascii=False, indent=4)
 
 if __name__ == '__main__':
     parser = ArgumentParser()

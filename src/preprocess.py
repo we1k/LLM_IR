@@ -147,7 +147,6 @@ def preprocess(embedding_model, local_run=False, max_sentence_len=20):
 
     # section_docs_tmp =  load_docs_from_jsonl("doc/section_docs_1.jsonl")
     # section_docs += section_docs_tmp
-    # save_docs_to_jsonl(section_docs, "doc/section_docs.jsonl")
     section_docs = load_docs_from_jsonl("doc/section_docs.jsonl")
 
     all_keywords = [doc.metadata["keyword"] for doc in section_docs] + [doc.metadata["subkeyword"] for doc in section_docs]
