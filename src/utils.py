@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple, Iterable, Optional
 
 import torch
 from langchain.docstore.document import Document
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.embeddings import HuggingFaceEmbeddings, HuggingFaceBgeEmbeddings
 from langchain.vectorstores.faiss import FAISS
 from fuzzywuzzy import fuzz, process
 
@@ -201,6 +201,33 @@ def remove_duplicate_strs(strings):
     ret_strs = clean_related_str(unique_strings)
     return "\n".join(ret_strs)
 
+def load_embedding_model(embedding_model, local_run=False):
+    if "bge" in embedding_model:
+        if local_run:
+            model_name = "/home/lzw/project/env/bge-large-zh-v1.5"
+        else:
+            model_name = "/app/rerank_model/bge-large-zh-v1.5"
+        embeddings = HuggingFaceBgeEmbeddings(
+            model_name=model_name,
+            model_kwargs={"device": "cuda"},
+            encode_kwargs={'normalize_embeddings': True})
+    elif "stella" in embedding_model:
+        if local_run:
+            model_name = "/home/lzw/.hf_models/stella-base-zh-v2"
+        else:
+            model_name = "/app/rerank_model/stella-base-zh-v2"
+        embeddings = HuggingFaceEmbeddings(
+            model_name=model_name,
+            model_kwargs={"device": "cuda"} ,
+            encode_kwargs={"normalize_embeddings": False})
+    elif "gte" in embedding_model:
+        model_name = "/app/models/gte-large-zh"
+        embeddings = HuggingFaceEmbeddings(
+            model_name=model_name,
+            model_kwargs={"device": "cuda"} ,
+            encode_kwargs={"normalize_embeddings": False})
+
+    return embeddings
 
 def timeit(func):
     """Decorator to measure the execution time of a function."""

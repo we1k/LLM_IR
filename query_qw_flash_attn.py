@@ -30,6 +30,10 @@ def make_context(
             return f"{role}\n{content}"
 
         system_text = _tokenize_str("system", system)
+        system_tokens_part = tokenizer.encode(
+                "system", allowed_special=set()
+            ) + nl_tokens + tokenizer.encode(system, allowed_special=set())
+        system_tokens = im_start_tokens + system_tokens_part + im_end_tokens
 
         raw_text = ""
         context_tokens = []
@@ -80,6 +84,11 @@ def get_answer(datas,prompt_template,model,tokenizer,params,abbre_dict,is_beam_s
             }
         
         user_info = ""
+        # for j in range(len(inputs["info"])):
+        #     user_info += "```{}```\n".format(j+1,inputs["info"][j]) 
+        #     if len(user_info) >= params["max_length"]:
+        #         user_info = user_info[:params["max_length"]]
+        #         break
         for j in range(len(inputs["info"])):
             if len(user_info) + len(inputs["info"][j]) < params["max_length"]:
                 user_info += "第{}条相关信息：\n{}\n".format(j+1,inputs["info"][j]) 
@@ -87,7 +96,14 @@ def get_answer(datas,prompt_template,model,tokenizer,params,abbre_dict,is_beam_s
                 user_info += "第{}条相关信息：\n{}\n".format(j+1,inputs["info"][j]) 
                 user_info = user_info[:params["max_length"]]
                 break
-
+        
+        # print(len(prompt_template))
+        # if len(prompt_template) > 100:
+        ####### few shot
+        #     system_string = "你是一位智能汽车使用说明的问答助手，现在需要选取已知信息中与问题最相关的部分，完整并简要地回答问题。请参照问题1和问题2的示例进行回答。"
+        # else:
+        # system_string = "你是一位智能汽车使用说明的问答助手，现在需要选取已知信息中与问题最相关的部分，完整并简要地回答问题，回答问题时最好保留原文的风格。"
+        
         raw_text = make_context(
             tokenizer,
             prompt_template.format(inputs["question"],user_info),
@@ -103,11 +119,8 @@ def get_answer(datas,prompt_template,model,tokenizer,params,abbre_dict,is_beam_s
     
 
     params.pop("max_length")
-    if is_beam_search == True:
-        # print(params)
-        sample_params = SamplingParams(**params,use_beam_search=True, stop=["<|im_end|>"])
-    else:
-        sample_params = SamplingParams(**params, stop=["<|im_end|>"])
+    # print(params)
+    sample_params = SamplingParams(**params,use_beam_search=is_beam_search, stop=["<|im_end|>"])
     preds = model.generate(all_raw_text, sample_params)
     # writing back
     for i, pred in enumerate(preds):
@@ -130,18 +143,18 @@ def main(opt):
         if opt.local_run:
             model_name_or_path = "./tcdata/qwen/Qwen-1_8B-Chat"
 
-        # model_name_or_path = "/tcdata/qwen/Qwen-14B-Chat-AWQ"
     print(model_name_or_path)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True, )
     max_tokens = 2048
     params = {"max_length":1024, "max_tokens":max_tokens,"top_p":opt.top_p,"temperature":opt.temperature}
-    generation_config = GenerationConfig.from_pretrained(model_name_or_path, pad_token_id=tokenizer.pad_token_id, **params, trust_remote_code=True)
+    # generation_config = GenerationConfig.from_pretrained(model_name_or_path, pad_token_id=tokenizer.pad_token_id, **params, trust_remote_code=True)
     if opt.beam_search:
         params["temperature"] = 0
         params["top_p"] = 1
         params["best_of"] = opt.best_of
         params["n"] = 1
+        params["length_penalty"] = opt.length_penalty
 
     # choose prompt
     prompt_template = PROMPT_TEMPLATE[opt.prompt_idx]
@@ -201,5 +214,6 @@ if __name__ == '__main__':
     parser.add_argument("--use-1_8B", action="store_true")
     parser.add_argument("--beam_search", action="store_true")
     parser.add_argument("--best_of", type=int, default=3)
+    parser.add_argument("--length_penalty", type=float, default=1)
     opt = parser.parse_args()
     main(opt)

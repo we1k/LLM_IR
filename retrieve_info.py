@@ -5,7 +5,6 @@ from tqdm import tqdm
 import re
 from argparse import ArgumentParser
 
-from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores.faiss import FAISS
 from langchain.docstore.document import Document
 from langchain.retrievers import BM25Retriever, EnsembleRetriever
@@ -17,14 +16,13 @@ from transformers import set_seed
 from fuzzywuzzy import process
 
 from src.preprocess import preprocess
-from src.embeddings import BGEpeftEmbedding
 from src.llm.template_manager import template_manager
-from src.utils import normalized_question, load_docs_from_jsonl, timeit
+from src.utils import normalized_question, load_docs_from_jsonl, load_embedding_model
 
 set_seed(42)
 # endpoint_url = ("http://127.0.0.1:29501")
 
-def run_query(args):
+def run_query(args, embeddings):
     if args.local_run == True:
         question_path = "data/all_question.json"
         # question_path = "data/test_question.json"
@@ -35,30 +33,6 @@ def run_query(args):
     with open(question_path, 'r', encoding='utf-8') as f:
         question_list = json.load(f)
     questions = [q['question'] for q in question_list]
-
-    # load in embedding model
-    if "bge" in args.embedding_model:
-        if args.local_run:
-            model_name = "/home/lzw/.hf_models/bge-large-zh-v1.5"
-        else:
-            model_name = "/app/embedding_models/bge-large-zh-v1.5"
-        embeddings = BGEpeftEmbedding(model_name)
-    elif "stella" in args.embedding_model:
-        if args.local_run:
-            model_name = "/home/lzw/.hf_models/stella-base-zh-v2"
-        else:
-            model_name = "/app/rerank_model/stella-base-zh-v2"
-        embeddings = HuggingFaceEmbeddings(
-            model_name=model_name,
-            model_kwargs={"device": "cuda"} ,
-            encode_kwargs={"normalize_embeddings": False})
-    elif "gte" in args.embedding_model:
-        model_name = "/app/models/gte-large-zh"
-        embeddings = HuggingFaceEmbeddings(
-            model_name=model_name,
-            model_kwargs={"device": "cuda"} ,
-            encode_kwargs={"normalize_embeddings": False})
-
 
     # adding jieba dict
     jieba.load_userdict("data/keywords.txt")
@@ -119,6 +93,7 @@ def run_query(args):
         ret_docs_with_score = content_db.similarity_search_with_relevance_scores(question, k=5)
         ret_docs = []
         for doc, score in ret_docs_with_score:
+            # print(doc, score)
             if score > args.threshold:
                 keywords.append((doc.metadata["subkeyword"], score))
                 ret_docs.append(doc)
@@ -157,7 +132,7 @@ def run_query(args):
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("--test", action="store_true")
-    parser.add_argument("--threshold", default=-140, type=int)
+    parser.add_argument("--threshold", default=0.3, type=float)
     parser.add_argument("--temperature", default=0.5, type=float)
     parser.add_argument("--top_p", default=0.6, type=float)
     parser.add_argument("--max_num_related_str", default=5, type=int)
@@ -166,5 +141,6 @@ if __name__ == '__main__':
     parser.add_argument("--embedding_model", default="stella")
     args = parser.parse_args()
     # bge // stella // gte
-    preprocess(args.embedding_model, args.local_run, args.max_sentence_len)
-    run_query(args)
+    embeddings = load_embedding_model(args.embedding_model, args.local_run) 
+    preprocess(embeddings, args.max_sentence_len)
+    run_query(args, embeddings)
