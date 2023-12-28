@@ -6,7 +6,7 @@ python-Levenshtein
 fuzzywuzzy
 
 langchain==0.0.174
-transformers==4.30.1
+transformers==4.36.0
 unstructured[local-inference]
 layoutparser[layoutmodels,tesseract]
 nltk~=3.8.1
