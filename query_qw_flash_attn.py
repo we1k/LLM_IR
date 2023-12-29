@@ -11,6 +11,37 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
 from src.prompt_template import PROMPT_TEMPLATE
 from src.utils import clean_question,seed_everything,write_json
 
+def get_prompt(datas, prompt_template, tokenizer,params, abbre_dict):
+    all_raw_text = []
+    for i, data in enumerate(datas):
+        inputs = {
+            "question": clean_question(data["question"],abbre_dict),
+            "info":data["related_str"]
+            }
+        
+        user_info = ""
+
+        for j in range(len(inputs["info"])):
+            if len(user_info) + len(inputs["info"][j]) < params["max_length"]:
+                user_info += "第{}条相关信息：\n{}\n".format(j+1,inputs["info"][j]) 
+            else:
+                user_info += "第{}条相关信息：\n{}\n".format(j+1,inputs["info"][j]) 
+                user_info = user_info[:params["max_length"]]
+                break
+        
+        raw_text = make_context(
+            tokenizer,
+            prompt_template.format(inputs["question"],user_info),
+            system="你是一位智能汽车说明的问答助手，你将根据节选的说明书的信息，完整并简洁地回答问题。",
+            max_window_size=3072,# model.generation_config.max_window_size,
+            chat_format="chatml", # model.generation_config.chat_format 
+        )
+
+        all_raw_text.append(raw_text)
+    
+    with open("result/prompt.json", "w", encoding="utf-8") as file:
+        json.dump(all_raw_text, file, ensure_ascii=False, indent=4)
+
 def make_context(
     tokenizer,
     query: str,
@@ -173,8 +204,6 @@ def main(opt):
 
     max_model_len = 2048 if opt.use_14B else 4096
 
-
-# model='/home/incar/newdata2/tms/llm/QWenData/Qwen-14B-Chat-Int4', tokenizer='/home/incar/newdata2/tms/llm/QWenData/Qwen-14B-Chat-Int4', tokenizer_mode=auto, revision=v1.1.8, tokenizer_revision=None, trust_remote_code=True, dtype=torch.float16, max_seq_len=2048, download_dir=None, load_format=auto, tensor_parallel_size=1, quantization=gptq, seed=0)
     if opt.local_run:
         llm = LLM(model=model_name_or_path, trust_remote_code=True, tensor_parallel_size=opt.tensor_parallel_size, gpu_memory_utilization=0.5, dtype=torch.float16, max_model_len=max_model_len)
     else:
